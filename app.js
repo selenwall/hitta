@@ -1,0 +1,565 @@
+/* Minimal local-only SPA for itta! object identification game */
+(() => {
+  /** State management (URL-param based, no backend) */
+  const DEFAULT_GAME = {
+    playerAName: '',
+    playerBName: '',
+    playerAScore: 0,
+    playerBScore: 0,
+    currentTurn: 'A', // A selects -> B guesses, then swap
+    targetLabel: '',
+    targetConfidence: 0,
+    isActive: false,
+    winner: '',
+  };
+
+  const WIN_POINTS = 5;
+  const TURN_SECONDS = 120; // 2 minutes
+
+  let game = { ...DEFAULT_GAME };
+  let detectorModel = null;
+  let mediaStream = null;
+  let timerInterval = null;
+  let secondsLeft = TURN_SECONDS;
+  let activeRAF = 0;
+
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+  const scoreBar = $('#scoreBar');
+  const screens = {
+    home: $('#screen-home'),
+    detect: $('#screen-detect'),
+    wait: $('#screen-wait'),
+    play: $('#screen-play'),
+    win: $('#screen-win'),
+  };
+
+  function setScreen(name) {
+    Object.values(screens).forEach(s => s.classList.remove('active'));
+    screens[name].classList.add('active');
+  }
+
+  function encodeStateToURL(next) {
+    const url = new URL(location.href);
+    const params = url.searchParams;
+    params.set('pa', next.playerAName || '');
+    params.set('pb', next.playerBName || '');
+    params.set('sa', String(next.playerAScore || 0));
+    params.set('sb', String(next.playerBScore || 0));
+    params.set('t', next.currentTurn || 'A');
+    params.set('lbl', next.targetLabel || '');
+    params.set('cf', String(next.targetConfidence || 0));
+    params.set('act', next.isActive ? '1' : '0');
+    params.set('w', next.winner || '');
+    history.replaceState({}, '', url);
+  }
+
+  function decodeStateFromURL() {
+    const url = new URL(location.href);
+    const p = url.searchParams;
+    const parsed = {
+      playerAName: p.get('pa') || '',
+      playerBName: p.get('pb') || '',
+      playerAScore: parseInt(p.get('sa') || '0', 10) || 0,
+      playerBScore: parseInt(p.get('sb') || '0', 10) || 0,
+      currentTurn: (p.get('t') || 'A') === 'B' ? 'B' : 'A',
+      targetLabel: p.get('lbl') || '',
+      targetConfidence: parseFloat(p.get('cf') || '0') || 0,
+      isActive: p.get('act') === '1',
+      winner: p.get('w') || '',
+    };
+    return { ...DEFAULT_GAME, ...parsed };
+  }
+
+  function updateScoreBar() {
+    scoreBar.textContent = `${game.playerAName || 'Spelare A'} ${game.playerAScore} – ${game.playerBScore} ${game.playerBName || 'Spelare B'}`;
+  }
+
+  function cancelRAF() {
+    if (activeRAF) {
+      cancelAnimationFrame(activeRAF);
+      activeRAF = 0;
+    }
+  }
+
+  function stopCamera() {
+    cancelRAF();
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+    }
+  }
+
+  async function startCamera(videoEl, facingMode = 'environment') {
+    stopCamera();
+    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+    videoEl.srcObject = mediaStream;
+    await videoEl.play();
+  }
+
+  async function loadModel() {
+    if (!detectorModel) {
+      detectorModel = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+    }
+    return detectorModel;
+  }
+
+  async function shareLink(text) {
+    const url = location.href;
+    const full = `${text} ${url}`.trim();
+    if (navigator.share) {
+      navigator.share({ title: 'itta! utmaning', text, url }).catch(() => {});
+      return;
+    }
+    // Fallback preference: SMS -> WhatsApp -> Clipboard
+    const sms = `sms:?&body=${encodeURIComponent(full)}`;
+    const opened = window.open(sms, '_blank');
+    if (!opened) {
+      const wa = `https://wa.me/?text=${encodeURIComponent(full)}`;
+      const openedWa = window.open(wa, '_blank');
+      if (!openedWa && navigator.clipboard?.writeText) {
+        try { await navigator.clipboard.writeText(full); alert('Länk kopierad. Klistra in i valfri app.'); } catch {}
+      }
+    }
+  }
+
+  function resetTimer(seconds = TURN_SECONDS) {
+    clearInterval(timerInterval);
+    secondsLeft = seconds;
+    $('#play-timer')?.replaceChildren(document.createTextNode(formatTime(secondsLeft)));
+  }
+
+  function startTimer(onExpire) {
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      secondsLeft -= 1;
+      const el = $('#play-timer');
+      if (el) el.textContent = formatTime(secondsLeft);
+      if (secondsLeft <= 0) {
+        clearInterval(timerInterval);
+        onExpire?.();
+      }
+    }, 1000);
+  }
+
+  function formatTime(total) {
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function checkWinner() {
+    if (game.playerAScore >= WIN_POINTS) return 'A';
+    if (game.playerBScore >= WIN_POINTS) return 'B';
+    return '';
+  }
+
+  function renderHome() {
+    updateScoreBar();
+    setScreen('home');
+    const hasActive = game.isActive;
+    screens.home.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'col card';
+
+    const title = document.createElement('h2');
+    title.textContent = 'Starta eller gå med i spel';
+    wrap.appendChild(title);
+
+    const nameRow = document.createElement('div');
+    nameRow.className = 'col';
+
+    const nameA = document.createElement('input');
+    nameA.placeholder = 'Ditt namn';
+    nameA.value = game.playerAName || '';
+    nameA.autocapitalize = 'words';
+    nameA.autocomplete = 'name';
+
+    const nameB = document.createElement('input');
+    nameB.placeholder = 'Motspelarens namn (om du startar)';
+    nameB.value = game.playerBName || '';
+
+    nameRow.appendChild(nameA);
+    nameRow.appendChild(nameB);
+    wrap.appendChild(nameRow);
+
+    const startBtn = document.createElement('button');
+    startBtn.className = 'primary';
+    startBtn.textContent = 'Starta nytt spel';
+    startBtn.onclick = () => {
+      game = {
+        ...game,
+        playerAName: nameA.value.trim() || 'Spelare A',
+        playerBName: nameB.value.trim() || 'Spelare B',
+        playerAScore: 0,
+        playerBScore: 0,
+        currentTurn: 'A',
+        targetLabel: '',
+        targetConfidence: 0,
+        isActive: true,
+        winner: '',
+      };
+      encodeStateToURL(game);
+      renderDetect();
+    };
+
+    const joinBtn = document.createElement('button');
+    joinBtn.className = 'ghost';
+    joinBtn.textContent = hasActive ? 'Fortsätt' : 'Gå med i spel via länk';
+    joinBtn.onclick = () => {
+      if (!hasActive) {
+        // Ask for your name if link has other player
+        game.playerBName = nameA.value.trim() || game.playerBName || 'Spelare B';
+        game.playerAName = game.playerAName || 'Spelare A';
+        game.isActive = true;
+        encodeStateToURL(game);
+      }
+      if (game.targetLabel) renderPlay(); else renderDetect();
+    };
+
+    wrap.appendChild(startBtn);
+    wrap.appendChild(joinBtn);
+    screens.home.appendChild(wrap);
+  }
+
+  function renderDetect() {
+    updateScoreBar();
+    setScreen('detect');
+    stopCamera();
+    screens.detect.innerHTML = '';
+    const container = document.createElement('div');
+    container.className = 'col';
+    const instruction = document.createElement('div');
+    instruction.className = 'pill';
+    instruction.textContent = 'Fotografera ett objekt att utmana motspelaren med';
+    container.appendChild(instruction);
+
+    const vw = document.createElement('div');
+    vw.className = 'video-wrap';
+    const video = document.createElement('video');
+    video.playsInline = true;
+    video.muted = true;
+    video.autoplay = true;
+    const canvas = document.createElement('canvas');
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay boxes';
+    vw.appendChild(video);
+    vw.appendChild(canvas);
+    vw.appendChild(overlay);
+    container.appendChild(vw);
+
+    const actions = document.createElement('div');
+    actions.className = 'footer-actions';
+    const snap = document.createElement('button');
+    snap.className = 'primary';
+    snap.textContent = 'Ta bild';
+    actions.appendChild(snap);
+    container.appendChild(actions);
+
+    screens.detect.appendChild(container);
+
+    // Live camera and detection
+    const ctx = canvas.getContext('2d');
+
+    const loop = async () => {
+      if (video.readyState >= 2) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+      activeRAF = requestAnimationFrame(loop);
+    };
+
+    const drawBoxes = (preds) => {
+      overlay.innerHTML = '';
+      preds.forEach((p, idx) => {
+        const [x, y, w, h] = p.bbox;
+        const b = document.createElement('div');
+        b.className = 'box';
+        b.style.left = `${x}px`;
+        b.style.top = `${y}px`;
+        b.style.width = `${w}px`;
+        b.style.height = `${h}px`;
+        const lab = document.createElement('label');
+        lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+        b.appendChild(lab);
+        overlay.appendChild(b);
+      });
+    };
+
+    startCamera(video).then(loadModel).then(() => {
+      loop();
+    }).catch(err => {
+      console.error(err);
+      alert('Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
+      setScreen('home');
+    });
+
+    snap.onclick = async () => {
+      try {
+        const model = await loadModel();
+        const preds = await model.detect(canvas);
+        drawBoxes(preds);
+        if (!preds.length) {
+          alert('Inga objekt hittades. Försök igen.');
+          return;
+        }
+        // If multiple, let user pick
+        const chooser = document.createElement('div');
+        chooser.className = 'card col';
+        const title = document.createElement('div');
+        title.textContent = 'Välj objekt att dela';
+        chooser.appendChild(title);
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+        preds.slice(0, 6).forEach((p) => {
+          const btn = document.createElement('button');
+          btn.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+          btn.onclick = () => {
+            game.targetLabel = p.class;
+            game.targetConfidence = p.score;
+            // Keep currentTurn as current selector (A) until rundan avslutas
+            game.isActive = true;
+            game.winner = '';
+            encodeStateToURL(game);
+            // Share link with names + score
+            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${game.targetLabel}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
+            shareLink(text);
+            stopCamera();
+            renderWait();
+          };
+          grid.appendChild(btn);
+        });
+        chooser.appendChild(grid);
+        screens.detect.appendChild(chooser);
+      } catch (e) {
+        console.error(e);
+        alert('Det gick inte att analysera bilden.');
+      }
+    };
+  }
+
+  function renderWait() {
+    updateScoreBar();
+    setScreen('wait');
+    stopCamera();
+    screens.wait.innerHTML = '';
+    const c = document.createElement('div');
+    c.className = 'center card';
+    const info = document.createElement('div');
+    info.innerHTML = `<div>Delad utmaning: <span class="name">${game.targetLabel || '-'}<\/span></div>`;
+    const tip = document.createElement('div');
+    tip.className = 'hint';
+    tip.textContent = 'Väntar på motspelaren. Dela länken om du inte gjort det.';
+    const back = document.createElement('button');
+    back.className = 'ghost';
+    back.textContent = 'Till startsidan';
+    back.onclick = () => renderHome();
+    c.appendChild(info);
+    c.appendChild(tip);
+    c.appendChild(back);
+    screens.wait.appendChild(c);
+  }
+
+  function finishRound(success) {
+    // currentTurn represents the current selector (who chose the target)
+    // The guesser is the other player and earns points on success.
+    if (game.currentTurn === 'A') {
+      if (success) game.playerBScore += 1; // B guessed
+      game.currentTurn = 'B'; // Next, B selects
+    } else {
+      if (success) game.playerAScore += 1; // A guessed
+      game.currentTurn = 'A'; // Next, A selects
+    }
+    game.targetLabel = '';
+    game.targetConfidence = 0;
+    const w = checkWinner();
+    game.winner = w;
+    encodeStateToURL(game);
+    if (w) {
+      renderWin();
+    } else {
+      renderDetect(); // Next selector picks a new target
+    }
+  }
+
+  function renderPlay() {
+    updateScoreBar();
+    setScreen('play');
+    stopCamera();
+    screens.play.innerHTML = '';
+    const container = document.createElement('div');
+    container.className = 'col';
+    const pill = document.createElement('div');
+    pill.className = 'pill';
+    pill.innerHTML = `<span>Hitta: <span class="name">${game.targetLabel}<\/span><\/span>`;
+    container.appendChild(pill);
+
+    const vw = document.createElement('div');
+    vw.className = 'video-wrap';
+    const video = document.createElement('video');
+    video.playsInline = true;
+    video.muted = true;
+    video.autoplay = true;
+    const canvas = document.createElement('canvas');
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay boxes';
+    vw.appendChild(video);
+    vw.appendChild(canvas);
+    vw.appendChild(overlay);
+    container.appendChild(vw);
+
+    const actions = document.createElement('div');
+    actions.className = 'footer-actions';
+    const timer = document.createElement('div');
+    timer.className = 'pill timer';
+    timer.id = 'play-timer';
+    timer.textContent = formatTime(TURN_SECONDS);
+    const snap = document.createElement('button');
+    snap.className = 'primary';
+    snap.textContent = 'Ta bild';
+    const giveUp = document.createElement('button');
+    giveUp.className = 'ghost';
+    giveUp.textContent = 'Ge upp';
+    actions.appendChild(timer);
+    actions.appendChild(snap);
+    actions.appendChild(giveUp);
+    container.appendChild(actions);
+
+    screens.play.appendChild(container);
+
+    const ctx = canvas.getContext('2d');
+
+    const loop = () => {
+      if (video.readyState >= 2) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+      activeRAF = requestAnimationFrame(loop);
+    };
+
+    startCamera(video).then(loadModel).then(() => {
+      loop();
+      resetTimer();
+      startTimer(() => {
+        stopCamera();
+        finishRound(false);
+      });
+    }).catch(err => {
+      console.error(err);
+      alert('Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
+      setScreen('home');
+    });
+
+    giveUp.onclick = () => {
+      clearInterval(timerInterval);
+      stopCamera();
+      finishRound(false);
+    };
+
+    const drawBoxes = (preds) => {
+      overlay.innerHTML = '';
+      preds.forEach((p) => {
+        const [x, y, w, h] = p.bbox;
+        const b = document.createElement('div');
+        b.className = 'box';
+        b.style.left = `${x}px`;
+        b.style.top = `${y}px`;
+        b.style.width = `${w}px`;
+        b.style.height = `${h}px`;
+        const lab = document.createElement('label');
+        lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+        b.appendChild(lab);
+        overlay.appendChild(b);
+      });
+    };
+
+    snap.onclick = async () => {
+      try {
+        const model = await loadModel();
+        const preds = await model.detect(canvas);
+        drawBoxes(preds);
+        if (!preds.length) {
+          alert('Inga objekt hittades. Försök igen.');
+          return;
+        }
+        // chooser
+        const chooser = document.createElement('div');
+        chooser.className = 'card col';
+        const title = document.createElement('div');
+        title.textContent = 'Välj objekt du hittade';
+        chooser.appendChild(title);
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+        preds.slice(0, 6).forEach((p) => {
+          const btn = document.createElement('button');
+          btn.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+          btn.onclick = () => {
+            const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
+            clearInterval(timerInterval);
+            stopCamera();
+            finishRound(success);
+          };
+          grid.appendChild(btn);
+        });
+        chooser.appendChild(grid);
+        screens.play.appendChild(chooser);
+      } catch (e) {
+        console.error(e);
+        alert('Det gick inte att analysera bilden.');
+      }
+    };
+  }
+
+  function renderWin() {
+    updateScoreBar();
+    setScreen('win');
+    stopCamera();
+    screens.win.innerHTML = '';
+    const c = document.createElement('div');
+    c.className = 'center card';
+    const who = game.winner === 'A' ? game.playerAName : game.playerBName;
+    const msg = document.createElement('h2');
+    msg.textContent = `${who} vann!`;
+    const again = document.createElement('button');
+    again.className = 'primary';
+    again.textContent = 'Spela igen';
+    again.onclick = () => {
+      const pa = game.playerAName || 'Spelare A';
+      const pb = game.playerBName || 'Spelare B';
+      game = { ...DEFAULT_GAME, playerAName: pa, playerBName: pb };
+      encodeStateToURL(game);
+      renderHome();
+    };
+    c.appendChild(msg);
+    c.appendChild(again);
+    screens.win.appendChild(c);
+  }
+
+  function route() {
+    game = decodeStateFromURL();
+    updateScoreBar();
+    if (!game.isActive) {
+      renderHome();
+      return;
+    }
+    if (game.winner) {
+      renderWin();
+      return;
+    }
+    if (game.targetLabel) {
+      renderPlay();
+      return;
+    }
+    renderDetect();
+  }
+
+  window.addEventListener('popstate', route);
+  window.addEventListener('load', () => {
+    // Hydrate from URL and render
+    route();
+  });
+})();
+
