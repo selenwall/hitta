@@ -22,6 +22,8 @@
   let timerInterval = null;
   let secondsLeft = TURN_SECONDS;
   let activeRAF = 0;
+  let liveDetectInterval = null;
+  let liveDetectInProgress = false;
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -83,8 +85,17 @@
     }
   }
 
+  function stopLiveDetect() {
+    if (liveDetectInterval) {
+      clearInterval(liveDetectInterval);
+      liveDetectInterval = null;
+    }
+    liveDetectInProgress = false;
+  }
+
   function stopCamera() {
     cancelRAF();
+    stopLiveDetect();
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());
       mediaStream = null;
@@ -284,7 +295,45 @@
       });
     };
 
-    startCamera(video).then(loadModel).catch(err => {
+    const drawLiveBoxes = (preds) => {
+      overlay.classList.remove('interactive');
+      overlay.innerHTML = '';
+      const vwRect = vw.getBoundingClientRect();
+      const scaleX = vwRect.width && video.videoWidth ? vwRect.width / video.videoWidth : 1;
+      const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
+      preds.forEach((p) => {
+        const [x, y, w, h] = p.bbox;
+        const b = document.createElement('div');
+        b.className = 'box';
+        b.style.left = `${x * scaleX}px`;
+        b.style.top = `${y * scaleY}px`;
+        b.style.width = `${w * scaleX}px`;
+        b.style.height = `${h * scaleY}px`;
+        const lab = document.createElement('label');
+        lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+        b.appendChild(lab);
+        overlay.appendChild(b);
+      });
+    };
+
+    startCamera(video).then(loadModel).then(() => {
+      // Throttled live detection overlay (no interaction)
+      stopLiveDetect();
+      liveDetectInterval = setInterval(async () => {
+        if (liveDetectInProgress) return;
+        if (!detectorModel) return;
+        if (video.readyState < 2) return;
+        try {
+          liveDetectInProgress = true;
+          const preds = await detectorModel.detect(video);
+          drawLiveBoxes(preds || []);
+        } catch (e) {
+          // ignore transient errors
+        } finally {
+          liveDetectInProgress = false;
+        }
+      }, 600);
+    }).catch(err => {
       console.error(err);
       alert('Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
       setScreen('home');
@@ -292,6 +341,7 @@
 
     snap.onclick = async () => {
       try {
+        stopLiveDetect();
         const model = await loadModel();
         // Freeze frame: draw current video to canvas, then hide video
         canvas.width = video.videoWidth;
@@ -482,6 +532,7 @@
     };
     snap.onclick = async () => {
       try {
+        stopLiveDetect();
         const model = await loadModel();
         // Freeze: draw current video frame to canvas, then hide video to show still
         canvas.width = video.videoWidth;
