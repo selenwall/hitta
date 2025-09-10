@@ -204,6 +204,14 @@
     return '';
   }
 
+  function showFeedbackPlusOne() {
+    const node = document.createElement('div');
+    node.className = 'feedback';
+    node.innerHTML = '👍 <span class="plus">+1<\/span>';
+    document.body.appendChild(node);
+    setTimeout(() => node.remove(), 1100);
+  }
+
   function renderHome() {
     updateScoreBar();
     setScreen('home');
@@ -326,8 +334,8 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
-        translateLabelToSv(p.class).then(sv => { lab.textContent = `${sv} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+        lab.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
+        translateLabelToSv(p.class).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
         overlay.appendChild(b);
@@ -350,8 +358,8 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
-        translateLabelToSv(p.class).then(sv => { lab.textContent = `${sv} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+        lab.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
+        translateLabelToSv(p.class).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = async (e) => {
           e.stopPropagation();
           try {
@@ -369,7 +377,7 @@
             game.winner = '';
             encodeStateToURL(game);
             const sv = await translateLabelToSv(game.targetLabel);
-            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${sv}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
+            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${(sv || '').toUpperCase()}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
             await shareLink(text);
             renderWait();
           } catch (err) {
@@ -429,7 +437,7 @@
           game.winner = '';
           encodeStateToURL(game);
           const sv = await translateLabelToSv(game.targetLabel);
-          const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${sv}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
+          const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${(sv || '').toUpperCase()}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
           await shareLink(text);
           renderWait();
         });
@@ -443,8 +451,8 @@
         grid.className = 'grid';
         preds.slice(0, 6).forEach((p) => {
           const btn = document.createElement('button');
-          btn.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
-          translateLabelToSv(p.class).then(sv => { btn.textContent = `${sv} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+          btn.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
+          translateLabelToSv(p.class).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
           btn.onclick = async () => {
             game.targetLabel = p.class;
             game.targetConfidence = p.score;
@@ -452,7 +460,7 @@
             game.winner = '';
             encodeStateToURL(game);
             const sv = await translateLabelToSv(game.targetLabel);
-            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${sv}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
+            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${(sv || '').toUpperCase()}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
             await shareLink(text);
             renderWait();
           };
@@ -593,9 +601,7 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
-        lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
-        b.appendChild(lab);
+        lab.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
         lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
         overlay.appendChild(b);
@@ -622,6 +628,16 @@
         drawInteractiveBoxes(preds, (p) => {
           const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
           clearInterval(timerInterval);
+          if (success) {
+            // Update score immediately and visual feedback
+            if (game.currentTurn === 'A') {
+              game.playerBScore += 1;
+            } else {
+              game.playerAScore += 1;
+            }
+            updateScoreBar();
+            showFeedbackPlusOne();
+          }
           finishRound(success);
         });
         // Fallback list
@@ -634,10 +650,19 @@
         grid.className = 'grid';
         preds.slice(0, 6).forEach((p) => {
           const btn = document.createElement('button');
-          btn.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+          btn.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
           btn.onclick = () => {
             const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
             clearInterval(timerInterval);
+            if (success) {
+              if (game.currentTurn === 'A') {
+                game.playerBScore += 1;
+              } else {
+                game.playerAScore += 1;
+              }
+              updateScoreBar();
+              showFeedbackPlusOne();
+            }
             finishRound(success);
           };
           grid.appendChild(btn);
