@@ -75,7 +75,16 @@
   }
 
   function updateScoreBar() {
-    scoreBar.textContent = `${game.playerAName || 'Spelare A'} ${game.playerAScore} – ${game.playerBScore} ${game.playerBName || 'Spelare B'}`;
+    const aName = game.playerAName || 'Spelare A';
+    const bName = game.playerBName || 'Spelare B';
+    const leader = game.playerAScore === game.playerBScore ? '' : (game.playerAScore > game.playerBScore ? 'A' : 'B');
+    const aClass = leader === 'A' ? 'badge win' : 'badge';
+    const bClass = leader === 'B' ? 'badge win' : 'badge';
+    scoreBar.innerHTML = `
+      <span class="${aClass}">${aName}<span class="vs"> ${game.playerAScore}<\/span><\/span>
+      <span class="vs">vs<\/span>
+      <span class="${bClass}"><span class="vs">${game.playerBScore} <\/span>${bName}<\/span>
+    `;
   }
 
   function cancelRAF() {
@@ -289,8 +298,8 @@
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
         lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+        lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
-        b.onclick = () => onPick(p);
         overlay.appendChild(b);
       });
     };
@@ -311,6 +320,29 @@
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
         lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+        lab.onclick = async (e) => {
+          e.stopPropagation();
+          try {
+            stopLiveDetect();
+            await loadModel();
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            video.style.display = 'none';
+            canvas.style.display = 'block';
+            stopCamera();
+            game.targetLabel = p.class;
+            game.targetConfidence = p.score;
+            game.isActive = true;
+            game.winner = '';
+            encodeStateToURL(game);
+            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${game.targetLabel}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
+            shareLink(text);
+            renderWait();
+          } catch (err) {
+            console.error(err);
+          }
+        };
         b.appendChild(lab);
         overlay.appendChild(b);
       });
@@ -525,8 +557,10 @@
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
         lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+        lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
-        b.onclick = () => onPick(p);
+        lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
+        b.appendChild(lab);
         overlay.appendChild(b);
       });
     };
