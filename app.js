@@ -271,19 +271,23 @@
       activeRAF = requestAnimationFrame(loop);
     };
 
-    const drawBoxes = (preds) => {
+    const drawInteractiveBoxes = (preds, onPick) => {
+      overlay.classList.add('interactive');
       overlay.innerHTML = '';
-      preds.forEach((p, idx) => {
+      const scaleX = overlay.clientWidth && canvas.width ? overlay.clientWidth / canvas.width : 1;
+      const scaleY = overlay.clientHeight && canvas.height ? overlay.clientHeight / canvas.height : 1;
+      preds.forEach((p) => {
         const [x, y, w, h] = p.bbox;
         const b = document.createElement('div');
         b.className = 'box';
-        b.style.left = `${x}px`;
-        b.style.top = `${y}px`;
-        b.style.width = `${w}px`;
-        b.style.height = `${h}px`;
+        b.style.left = `${x * scaleX}px`;
+        b.style.top = `${y * scaleY}px`;
+        b.style.width = `${w * scaleX}px`;
+        b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
         lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
         b.appendChild(lab);
+        b.onclick = () => onPick(p);
         overlay.appendChild(b);
       });
     };
@@ -300,16 +304,28 @@
       try {
         const model = await loadModel();
         const preds = await model.detect(canvas);
-        drawBoxes(preds);
+        // Freeze current frame and enable interactive overlay
+        cancelRAF();
+        stopCamera();
         if (!preds.length) {
           alert('Inga objekt hittades. Försök igen.');
           return;
         }
-        // If multiple, let user pick
+        drawInteractiveBoxes(preds, (p) => {
+          game.targetLabel = p.class;
+          game.targetConfidence = p.score;
+          game.isActive = true;
+          game.winner = '';
+          encodeStateToURL(game);
+          const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${game.targetLabel}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
+          shareLink(text);
+          renderWait();
+        });
+        // Fallback list
         const chooser = document.createElement('div');
         chooser.className = 'card col';
         const title = document.createElement('div');
-        title.textContent = 'Välj objekt att dela';
+        title.textContent = 'Eller välj i listan';
         chooser.appendChild(title);
         const grid = document.createElement('div');
         grid.className = 'grid';
@@ -319,14 +335,11 @@
           btn.onclick = () => {
             game.targetLabel = p.class;
             game.targetConfidence = p.score;
-            // Keep currentTurn as current selector (A) until rundan avslutas
             game.isActive = true;
             game.winner = '';
             encodeStateToURL(game);
-            // Share link with names + score
             const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${game.targetLabel}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
             shareLink(text);
-            stopCamera();
             renderWait();
           };
           grid.appendChild(btn);
@@ -459,37 +472,47 @@
       finishRound(false);
     };
 
-    const drawBoxes = (preds) => {
+    const drawInteractiveBoxes = (preds, onPick) => {
+      overlay.classList.add('interactive');
       overlay.innerHTML = '';
+      const scaleX = overlay.clientWidth && canvas.width ? overlay.clientWidth / canvas.width : 1;
+      const scaleY = overlay.clientHeight && canvas.height ? overlay.clientHeight / canvas.height : 1;
       preds.forEach((p) => {
         const [x, y, w, h] = p.bbox;
         const b = document.createElement('div');
         b.className = 'box';
-        b.style.left = `${x}px`;
-        b.style.top = `${y}px`;
-        b.style.width = `${w}px`;
-        b.style.height = `${h}px`;
+        b.style.left = `${x * scaleX}px`;
+        b.style.top = `${y * scaleY}px`;
+        b.style.width = `${w * scaleX}px`;
+        b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
         lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
         b.appendChild(lab);
+        b.onclick = () => onPick(p);
         overlay.appendChild(b);
       });
     };
-
     snap.onclick = async () => {
       try {
         const model = await loadModel();
         const preds = await model.detect(canvas);
-        drawBoxes(preds);
+        // Freeze frame and enable interactive overlay
+        cancelRAF();
+        stopCamera();
         if (!preds.length) {
           alert('Inga objekt hittades. Försök igen.');
           return;
         }
-        // chooser
+        drawInteractiveBoxes(preds, (p) => {
+          const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
+          clearInterval(timerInterval);
+          finishRound(success);
+        });
+        // Fallback list
         const chooser = document.createElement('div');
         chooser.className = 'card col';
         const title = document.createElement('div');
-        title.textContent = 'Välj objekt du hittade';
+        title.textContent = 'Eller välj i listan';
         chooser.appendChild(title);
         const grid = document.createElement('div');
         grid.className = 'grid';
@@ -499,7 +522,6 @@
           btn.onclick = () => {
             const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
             clearInterval(timerInterval);
-            stopCamera();
             finishRound(success);
           };
           grid.appendChild(btn);
