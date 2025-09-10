@@ -242,6 +242,7 @@
     video.muted = true;
     video.autoplay = true;
     const canvas = document.createElement('canvas');
+    canvas.style.display = 'none';
     const overlay = document.createElement('div');
     overlay.className = 'overlay boxes';
     vw.appendChild(video);
@@ -259,17 +260,8 @@
 
     screens.detect.appendChild(container);
 
-    // Live camera and detection
+    // Live camera only (no canvas painting until capture)
     const ctx = canvas.getContext('2d');
-
-    const loop = async () => {
-      if (video.readyState >= 2) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
-      activeRAF = requestAnimationFrame(loop);
-    };
 
     const drawInteractiveBoxes = (preds, onPick) => {
       overlay.classList.add('interactive');
@@ -292,9 +284,7 @@
       });
     };
 
-    startCamera(video).then(loadModel).then(() => {
-      loop();
-    }).catch(err => {
+    startCamera(video).then(loadModel).catch(err => {
       console.error(err);
       alert('Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
       setScreen('home');
@@ -303,9 +293,14 @@
     snap.onclick = async () => {
       try {
         const model = await loadModel();
+        // Freeze frame: draw current video to canvas, then hide video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        video.style.display = 'none';
+        canvas.style.display = 'block';
         const preds = await model.detect(canvas);
-        // Freeze current frame and enable interactive overlay
-        cancelRAF();
+        // Stop camera after capture
         stopCamera();
         if (!preds.length) {
           alert('Inga objekt hittades. Försök igen.');
@@ -416,6 +411,7 @@
     video.muted = true;
     video.autoplay = true;
     const canvas = document.createElement('canvas');
+    canvas.style.display = 'none';
     const overlay = document.createElement('div');
     overlay.className = 'overlay boxes';
     vw.appendChild(video);
@@ -444,17 +440,9 @@
 
     const ctx = canvas.getContext('2d');
 
-    const loop = () => {
-      if (video.readyState >= 2) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
-      activeRAF = requestAnimationFrame(loop);
-    };
+    // Live video only (no canvas drawing until capture)
 
     startCamera(video).then(loadModel).then(() => {
-      loop();
       resetTimer();
       startTimer(() => {
         stopCamera();
@@ -495,9 +483,14 @@
     snap.onclick = async () => {
       try {
         const model = await loadModel();
+        // Freeze: draw current video frame to canvas, then hide video to show still
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        video.style.display = 'none';
+        canvas.style.display = 'block';
         const preds = await model.detect(canvas);
-        // Freeze frame and enable interactive overlay
-        cancelRAF();
+        // Stop camera after capture so overlays don't double up
         stopCamera();
         if (!preds.length) {
           alert('Inga objekt hittades. Försök igen.');
