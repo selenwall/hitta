@@ -15,6 +15,7 @@
 
   const WIN_POINTS = 5;
   const TURN_SECONDS = 120; // 2 minutes
+  const MIN_SCORE = 0.6; // Only show objects > 60%
 
   let game = { ...DEFAULT_GAME };
   let detectorModel = null;
@@ -310,7 +311,8 @@
       const vwRect = vw.getBoundingClientRect();
       const scaleX = vwRect.width && video.videoWidth ? vwRect.width / video.videoWidth : 1;
       const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
-      preds.forEach((p) => {
+      const list = (preds || []).filter(p => p.score > MIN_SCORE);
+      list.forEach((p) => {
         const [x, y, w, h] = p.bbox;
         const b = document.createElement('div');
         b.className = 'box';
@@ -381,11 +383,12 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         video.style.display = 'none';
         canvas.style.display = 'block';
-        const preds = await model.detect(canvas);
+        const allPreds = await model.detect(canvas);
+        const preds = (allPreds || []).filter(p => p.score > MIN_SCORE);
         // Stop camera after capture
         stopCamera();
         if (!preds.length) {
-          alert('Inga objekt hittades. Försök igen.');
+          alert('Inga objekt över 60% hittades. Försök igen.');
           return;
         }
         drawInteractiveBoxes(preds, (p) => {
@@ -574,11 +577,12 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         video.style.display = 'none';
         canvas.style.display = 'block';
-        const preds = await model.detect(canvas);
+        const allPreds = await model.detect(canvas);
+        const preds = (allPreds || []).filter(p => p.score > MIN_SCORE);
         // Stop camera after capture so overlays don't double up
         stopCamera();
         if (!preds.length) {
-          alert('Inga objekt hittades. Försök igen.');
+          alert('Inga objekt över 60% hittades. Försök igen.');
           return;
         }
         drawInteractiveBoxes(preds, (p) => {
