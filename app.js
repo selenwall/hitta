@@ -475,7 +475,7 @@
     const c = document.createElement('div');
     c.className = 'center card';
     const info = document.createElement('div');
-    info.innerHTML = `<div>Delad utmaning: <span class="name">${game.targetLabel || '-'}<\/span></div>`;
+    info.innerHTML = `<div>Delad utmaning: <span class="name">${(game.targetLabel || '-').toUpperCase()}<\/span><\/div>`;
     const tip = document.createElement('div');
     tip.className = 'hint';
     tip.textContent = 'Väntar på motspelaren. Dela länken om du inte gjort det.';
@@ -520,7 +520,7 @@
     container.className = 'col';
     const pill = document.createElement('div');
     pill.className = 'pill';
-    pill.innerHTML = `<span>Hitta: <span class="name">${game.targetLabel}<\/span><\/span>`;
+    pill.innerHTML = `<span>Hitta: <span class="name">${(game.targetLabel || '').toUpperCase()}<\/span><\/span>`;
     container.appendChild(pill);
 
     const vw = document.createElement('div');
