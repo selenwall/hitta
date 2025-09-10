@@ -25,6 +25,7 @@
   let activeRAF = 0;
   let liveDetectInterval = null;
   let liveDetectInProgress = false;
+  let roundAwarded = false;
   const translateCache = new Map();
   const inflightTranslate = new Map();
 
@@ -209,7 +210,7 @@
     node.className = 'feedback';
     node.innerHTML = '👍 <span class="plus">+1<\/span>';
     document.body.appendChild(node);
-    setTimeout(() => node.remove(), 1100);
+    setTimeout(() => node.remove(), 3000);
   }
 
   function renderHome() {
@@ -509,6 +510,7 @@
     }
     game.targetLabel = '';
     game.targetConfidence = 0;
+    roundAwarded = false;
     const w = checkWinner();
     game.winner = w;
     encodeStateToURL(game);
@@ -524,6 +526,7 @@
     setScreen('play');
     stopCamera();
     screens.play.innerHTML = '';
+    roundAwarded = false;
     const container = document.createElement('div');
     container.className = 'col';
     const pill = document.createElement('div');
@@ -625,20 +628,20 @@
           alert('Inga objekt över 60% hittades. Försök igen.');
           return;
         }
-        drawInteractiveBoxes(preds, (p) => {
-          const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
-          clearInterval(timerInterval);
+        const awardOnce = (success) => {
+          if (roundAwarded) return;
+          roundAwarded = true;
           if (success) {
-            // Update score immediately and visual feedback
-            if (game.currentTurn === 'A') {
-              game.playerBScore += 1;
-            } else {
-              game.playerAScore += 1;
-            }
+            if (game.currentTurn === 'A') game.playerBScore += 1; else game.playerAScore += 1;
             updateScoreBar();
             showFeedbackPlusOne();
           }
           finishRound(success);
+        };
+        drawInteractiveBoxes(preds, (p) => {
+          const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
+          clearInterval(timerInterval);
+          awardOnce(success);
         });
         // Fallback list
         const chooser = document.createElement('div');
@@ -654,16 +657,7 @@
           btn.onclick = () => {
             const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
             clearInterval(timerInterval);
-            if (success) {
-              if (game.currentTurn === 'A') {
-                game.playerBScore += 1;
-              } else {
-                game.playerAScore += 1;
-              }
-              updateScoreBar();
-              showFeedbackPlusOne();
-            }
-            finishRound(success);
+            awardOnce(success);
           };
           grid.appendChild(btn);
         });
