@@ -25,6 +25,8 @@
   let activeRAF = 0;
   let liveDetectInterval = null;
   let liveDetectInProgress = false;
+  const translateCache = new Map();
+  const inflightTranslate = new Map();
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -124,6 +126,32 @@
       detectorModel = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
     }
     return detectorModel;
+  }
+
+  async function translateLabelToSv(label) {
+    try {
+      const key = (label || '').trim().toLowerCase();
+      if (!key) return label;
+      if (translateCache.has(key)) return translateCache.get(key);
+      if (inflightTranslate.has(key)) return inflightTranslate.get(key);
+      const p = fetch('https://libretranslate.com/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: key, source: 'en', target: 'sv', format: 'text' }),
+      }).then(r => r.json()).then(j => {
+        const out = (j && j.translatedText) ? j.translatedText : label;
+        translateCache.set(key, out);
+        inflightTranslate.delete(key);
+        return out;
+      }).catch(() => {
+        inflightTranslate.delete(key);
+        return label;
+      });
+      inflightTranslate.set(key, p);
+      return p;
+    } catch {
+      return label;
+    }
   }
 
   async function shareLink(text) {
@@ -299,6 +327,7 @@
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
         lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+        translateLabelToSv(p.class).then(sv => { lab.textContent = `${sv} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
         overlay.appendChild(b);
@@ -322,6 +351,7 @@
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
         lab.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
+        translateLabelToSv(p.class).then(sv => { lab.textContent = `${sv} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = async (e) => {
           e.stopPropagation();
           try {
@@ -338,8 +368,9 @@
             game.isActive = true;
             game.winner = '';
             encodeStateToURL(game);
-            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${game.targetLabel}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
-            shareLink(text);
+            const sv = await translateLabelToSv(game.targetLabel);
+            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${sv}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
+            await shareLink(text);
             renderWait();
           } catch (err) {
             console.error(err);
@@ -391,14 +422,15 @@
           alert('Inga objekt över 60% hittades. Försök igen.');
           return;
         }
-        drawInteractiveBoxes(preds, (p) => {
+        drawInteractiveBoxes(preds, async (p) => {
           game.targetLabel = p.class;
           game.targetConfidence = p.score;
           game.isActive = true;
           game.winner = '';
           encodeStateToURL(game);
-          const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${game.targetLabel}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
-          shareLink(text);
+          const sv = await translateLabelToSv(game.targetLabel);
+          const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${sv}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
+          await shareLink(text);
           renderWait();
         });
         // Fallback list
@@ -412,14 +444,16 @@
         preds.slice(0, 6).forEach((p) => {
           const btn = document.createElement('button');
           btn.textContent = `${p.class} ${(p.score*100).toFixed(0)}%`;
-          btn.onclick = () => {
+          translateLabelToSv(p.class).then(sv => { btn.textContent = `${sv} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+          btn.onclick = async () => {
             game.targetLabel = p.class;
             game.targetConfidence = p.score;
             game.isActive = true;
             game.winner = '';
             encodeStateToURL(game);
-            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${game.targetLabel}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
-            shareLink(text);
+            const sv = await translateLabelToSv(game.targetLabel);
+            const text = `${game.playerAName} utmanar ${game.playerBName} att hitta: ${sv}. Ställning ${game.playerAScore}-${game.playerBScore}.`;
+            await shareLink(text);
             renderWait();
           };
           grid.appendChild(btn);
