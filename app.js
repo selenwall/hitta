@@ -29,6 +29,90 @@
   const translateCache = new Map();
   const inflightTranslate = new Map();
 
+  // Offline Swedish translations for COCO-SSD labels
+  const COCO_SV = {
+    person: 'person',
+    bicycle: 'cykel',
+    car: 'bil',
+    motorcycle: 'motorcykel',
+    airplane: 'flygplan',
+    bus: 'buss',
+    train: 'tåg',
+    truck: 'lastbil',
+    boat: 'båt',
+    'traffic light': 'trafikljus',
+    'fire hydrant': 'brandpost',
+    'stop sign': 'stoppskylt',
+    'parking meter': 'parkeringsautomat',
+    bench: 'bänk',
+    bird: 'fågel',
+    cat: 'katt',
+    dog: 'hund',
+    horse: 'häst',
+    sheep: 'får',
+    cow: 'ko',
+    elephant: 'elefant',
+    bear: 'björn',
+    zebra: 'zebra',
+    giraffe: 'giraff',
+    backpack: 'ryggsäck',
+    umbrella: 'paraply',
+    handbag: 'handväska',
+    tie: 'slips',
+    suitcase: 'resväska',
+    frisbee: 'frisbee',
+    skis: 'skidor',
+    snowboard: 'snowboard',
+    'sports ball': 'boll',
+    kite: 'drake',
+    'baseball bat': 'basebollträ',
+    'baseball glove': 'basebollhandske',
+    skateboard: 'skateboard',
+    surfboard: 'surfbräda',
+    'tennis racket': 'tennisracket',
+    bottle: 'flaska',
+    'wine glass': 'vinglas',
+    cup: 'kopp',
+    fork: 'gaffel',
+    knife: 'kniv',
+    spoon: 'sked',
+    bowl: 'skål',
+    banana: 'banan',
+    apple: 'äpple',
+    sandwich: 'smörgås',
+    orange: 'apelsin',
+    broccoli: 'broccoli',
+    carrot: 'morot',
+    'hot dog': 'varmkorv',
+    pizza: 'pizza',
+    donut: 'munk',
+    cake: 'tårta',
+    chair: 'stol',
+    couch: 'soffa',
+    'potted plant': 'krukväxt',
+    bed: 'säng',
+    'dining table': 'matbord',
+    toilet: 'toalett',
+    tv: 'tv',
+    laptop: 'laptop',
+    mouse: 'mus',
+    remote: 'fjärrkontroll',
+    keyboard: 'tangentbord',
+    'cell phone': 'mobiltelefon',
+    microwave: 'mikrovågsugn',
+    oven: 'ugn',
+    toaster: 'brödrost',
+    sink: 'diskho',
+    refrigerator: 'kylskåp',
+    book: 'bok',
+    clock: 'klocka',
+    vase: 'vas',
+    scissors: 'sax',
+    'teddy bear': 'nallebjörn',
+    'hair drier': 'hårtork',
+    toothbrush: 'tandborste',
+  };
+
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
@@ -132,8 +216,13 @@
   async function translateLabelToSv(label) {
     try {
       const key = (label || '').trim().toLowerCase();
-      if (!key) return label;
-      if (translateCache.has(key)) return translateCache.get(key);
+      if (!key) return Promise.resolve(label);
+      if (translateCache.has(key)) return Promise.resolve(translateCache.get(key));
+      if (COCO_SV[key]) {
+        const mapped = COCO_SV[key];
+        translateCache.set(key, mapped);
+        return Promise.resolve(mapped);
+      }
       if (inflightTranslate.has(key)) return inflightTranslate.get(key);
       const p = fetch('https://libretranslate.com/translate', {
         method: 'POST',
@@ -151,7 +240,7 @@
       inflightTranslate.set(key, p);
       return p;
     } catch {
-      return label;
+      return Promise.resolve(label);
     }
   }
 
@@ -485,6 +574,11 @@
     c.className = 'center card';
     const info = document.createElement('div');
     info.innerHTML = `<div>Delad utmaning: <span class="name">${(game.targetLabel || '-').toUpperCase()}<\/span><\/div>`;
+    // Update with Swedish translation if available
+    translateLabelToSv(game.targetLabel).then(sv => {
+      const span = info.querySelector('.name');
+      if (span && sv) span.textContent = (sv || '').toUpperCase();
+    }).catch(() => {});
     const tip = document.createElement('div');
     tip.className = 'hint';
     tip.textContent = 'Väntar på motspelaren. Dela länken om du inte gjort det.';
@@ -532,6 +626,11 @@
     const pill = document.createElement('div');
     pill.className = 'pill';
     pill.innerHTML = `<span>Hitta: <span class="name">${(game.targetLabel || '').toUpperCase()}<\/span><\/span>`;
+    // Update with Swedish translation if available
+    translateLabelToSv(game.targetLabel).then(sv => {
+      const span = pill.querySelector('.name');
+      if (span && sv) span.textContent = (sv || '').toUpperCase();
+    }).catch(() => {});
     container.appendChild(pill);
 
     const vw = document.createElement('div');
@@ -605,6 +704,7 @@
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
         lab.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
+        translateLabelToSv(p.class).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
         overlay.appendChild(b);
@@ -654,6 +754,7 @@
         preds.slice(0, 6).forEach((p) => {
           const btn = document.createElement('button');
           btn.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
+          translateLabelToSv(p.class).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
           btn.onclick = () => {
             const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
             clearInterval(timerInterval);
