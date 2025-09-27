@@ -12,6 +12,8 @@
     isActive: false,
     winner: '',
     winPoints: 5,
+    canceledBy: '',
+    gameId: '',
   };
 
   const WIN_POINTS = 5; // default fallback if not set in state
@@ -144,6 +146,8 @@
     params.set('act', next.isActive ? '1' : '0');
     params.set('w', next.winner || '');
     params.set('wp', String(next.winPoints || WIN_POINTS));
+    params.set('cx', next.canceledBy || '');
+    params.set('gid', next.gameId || '');
     history.replaceState({}, '', url);
   }
 
@@ -161,6 +165,8 @@
       isActive: p.get('act') === '1',
       winner: p.get('w') || '',
       winPoints: parseInt(p.get('wp') || String(WIN_POINTS), 10) || WIN_POINTS,
+      canceledBy: p.get('cx') || '',
+      gameId: p.get('gid') || '',
     };
     return { ...DEFAULT_GAME, ...parsed };
   }
@@ -364,6 +370,8 @@
     startBtn.className = 'primary';
     startBtn.textContent = 'Starta nytt spel';
     startBtn.onclick = () => {
+      const gid = Math.random().toString(36).slice(2, 10);
+      try { localStorage.setItem('itta_owner_gid', gid); } catch {}
       game = {
         ...game,
         playerAName: nameA.value.trim() || 'Spelare A',
@@ -376,6 +384,8 @@
         isActive: true,
         winner: '',
         winPoints: parseInt(rounds.value, 10) || (game.winPoints || WIN_POINTS),
+        canceledBy: '',
+        gameId: gid,
       };
       encodeStateToURL(game);
       renderDetect();
@@ -432,6 +442,19 @@
     const snap = document.createElement('button');
     snap.className = 'primary';
     snap.textContent = 'Ta bild';
+    const isOwner = (() => { try { return game.gameId && localStorage.getItem('itta_owner_gid') === game.gameId; } catch { return false; } })();
+    if (isOwner) {
+      const cancel = document.createElement('button');
+      cancel.className = 'danger';
+      cancel.textContent = 'Avbryt spel';
+      cancel.onclick = () => {
+        game.isActive = false;
+        game.canceledBy = game.playerAName || 'Spelare A';
+        encodeStateToURL(game);
+        renderCancel();
+      };
+      actions.appendChild(cancel);
+    }
     actions.appendChild(snap);
     container.appendChild(actions);
 
@@ -616,6 +639,19 @@
     back.className = 'ghost';
     back.textContent = 'Till startsidan';
     back.onclick = () => renderHome();
+    const isOwner = (() => { try { return game.gameId && localStorage.getItem('itta_owner_gid') === game.gameId; } catch { return false; } })();
+    if (isOwner) {
+      const cancel = document.createElement('button');
+      cancel.className = 'danger';
+      cancel.textContent = 'Avbryt spel';
+      cancel.onclick = () => {
+        game.isActive = false;
+        game.canceledBy = game.playerAName || 'Spelare A';
+        encodeStateToURL(game);
+        renderCancel();
+      };
+      c.appendChild(cancel);
+    }
     c.appendChild(info);
     c.appendChild(tip);
     c.appendChild(back);
@@ -688,6 +724,21 @@
     const giveUp = document.createElement('button');
     giveUp.className = 'ghost';
     giveUp.textContent = 'Ge upp';
+    const isOwner = (() => { try { return game.gameId && localStorage.getItem('itta_owner_gid') === game.gameId; } catch { return false; } })();
+    if (isOwner) {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'danger';
+      cancelBtn.textContent = 'Avbryt spel';
+      cancelBtn.onclick = () => {
+        clearInterval(timerInterval);
+        stopCamera();
+        game.isActive = false;
+        game.canceledBy = game.playerAName || 'Spelare A';
+        encodeStateToURL(game);
+        renderCancel();
+      };
+      actions.appendChild(cancelBtn);
+    }
     actions.appendChild(timer);
     actions.appendChild(snap);
     actions.appendChild(giveUp);
@@ -862,9 +913,42 @@
     screens.win.appendChild(c);
   }
 
+  function renderCancel() {
+    updateScoreBar();
+    setScreen('cancel');
+    stopCamera();
+    screens.cancel.innerHTML = '';
+    const c = document.createElement('div');
+    c.className = 'center card';
+    const msg = document.createElement('h2');
+    const who = game.canceledBy || 'Spelare A';
+    msg.textContent = `${who} avbröt spelet`;
+    const info = document.createElement('div');
+    info.className = 'notice';
+    info.textContent = 'Spelet är avslutat. Starta ett nytt spel från startsidan.';
+    const home = document.createElement('button');
+    home.className = 'primary';
+    home.textContent = 'Till startsidan';
+    home.onclick = () => {
+      const pa = game.playerAName || 'Spelare A';
+      const pb = game.playerBName || 'Spelare B';
+      game = { ...DEFAULT_GAME, playerAName: pa, playerBName: pb };
+      encodeStateToURL(game);
+      renderHome();
+    };
+    c.appendChild(msg);
+    c.appendChild(info);
+    c.appendChild(home);
+    screens.cancel.appendChild(c);
+  }
+
   function route() {
     game = decodeStateFromURL();
     updateScoreBar();
+    if (game.canceledBy) {
+      renderCancel();
+      return;
+    }
     if (!game.isActive) {
       renderHome();
       return;
