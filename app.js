@@ -335,7 +335,7 @@
     nameRow.appendChild(nameB);
     wrap.appendChild(nameRow);
 
-    // Rounds selector
+    // Rounds selector (only before start)
     const roundsRow = document.createElement('div');
     roundsRow.className = 'row';
     const roundsLabel = document.createElement('label');
@@ -356,7 +356,9 @@
     };
     roundsRow.appendChild(roundsLabel);
     roundsRow.appendChild(rounds);
-    wrap.appendChild(roundsRow);
+    if (!hasActive) {
+      wrap.appendChild(roundsRow);
+    }
 
     const startBtn = document.createElement('button');
     startBtn.className = 'primary';
