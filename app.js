@@ -670,6 +670,28 @@
     const ctx = canvas.getContext('2d');
 
     // Live video only (no canvas drawing until capture)
+    const drawLiveBoxes = (preds) => {
+      overlay.classList.remove('interactive');
+      overlay.innerHTML = '';
+      const vwRect = vw.getBoundingClientRect();
+      const scaleX = vwRect.width && video.videoWidth ? vwRect.width / video.videoWidth : 1;
+      const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
+      const list = (preds || []).filter(p => p.score > MIN_SCORE);
+      list.forEach((p) => {
+        const [x, y, w, h] = p.bbox;
+        const b = document.createElement('div');
+        b.className = 'box';
+        b.style.left = `${x * scaleX}px`;
+        b.style.top = `${y * scaleY}px`;
+        b.style.width = `${w * scaleX}px`;
+        b.style.height = `${h * scaleY}px`;
+        const lab = document.createElement('label');
+        lab.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
+        translateLabelToSv(p.class).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+        b.appendChild(lab);
+        overlay.appendChild(b);
+      });
+    };
 
     startCamera(video).then(loadModel).then(() => {
       resetTimer();
@@ -677,6 +699,22 @@
         stopCamera();
         finishRound(false);
       });
+      // Throttled live detection overlay during play
+      stopLiveDetect();
+      liveDetectInterval = setInterval(async () => {
+        if (liveDetectInProgress) return;
+        if (!detectorModel) return;
+        if (video.readyState < 2) return;
+        try {
+          liveDetectInProgress = true;
+          const preds = await detectorModel.detect(video);
+          drawLiveBoxes(preds || []);
+        } catch (e) {
+          // ignore transient detection errors
+        } finally {
+          liveDetectInProgress = false;
+        }
+      }, 600);
     }).catch(err => {
       console.error(err);
       alert('Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
