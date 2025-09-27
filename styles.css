@@ -16,6 +16,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:sy
 .hidden{display:none}
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
 .row{display:flex;gap:12px;align-items:center}
+select{padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:#121212;color:var(--fg)}
 .col{display:flex;flex-direction:column;gap:12px}
 button, input, select{font:inherit}
 button{padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:#1b1b1b;color:var(--fg);font-weight:600}

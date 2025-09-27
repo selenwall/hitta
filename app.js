@@ -11,9 +11,10 @@
     targetConfidence: 0,
     isActive: false,
     winner: '',
+    winPoints: 5,
   };
 
-  const WIN_POINTS = 5;
+  const WIN_POINTS = 5; // default fallback if not set in state
   const TURN_SECONDS = 120; // 2 minutes
   const MIN_SCORE = 0.6; // Only show objects > 60%
 
@@ -142,6 +143,7 @@
     params.set('cf', String(next.targetConfidence || 0));
     params.set('act', next.isActive ? '1' : '0');
     params.set('w', next.winner || '');
+    params.set('wp', String(next.winPoints || WIN_POINTS));
     history.replaceState({}, '', url);
   }
 
@@ -158,6 +160,7 @@
       targetConfidence: parseFloat(p.get('cf') || '0') || 0,
       isActive: p.get('act') === '1',
       winner: p.get('w') || '',
+      winPoints: parseInt(p.get('wp') || String(WIN_POINTS), 10) || WIN_POINTS,
     };
     return { ...DEFAULT_GAME, ...parsed };
   }
@@ -289,8 +292,9 @@
   }
 
   function checkWinner() {
-    if (game.playerAScore >= WIN_POINTS) return 'A';
-    if (game.playerBScore >= WIN_POINTS) return 'B';
+    const target = game.winPoints || WIN_POINTS;
+    if (game.playerAScore >= target) return 'A';
+    if (game.playerBScore >= target) return 'B';
     return '';
   }
 
@@ -331,6 +335,29 @@
     nameRow.appendChild(nameB);
     wrap.appendChild(nameRow);
 
+    // Rounds selector
+    const roundsRow = document.createElement('div');
+    roundsRow.className = 'row';
+    const roundsLabel = document.createElement('label');
+    roundsLabel.textContent = 'Spelomgångar (först till):';
+    const rounds = document.createElement('select');
+    [1,3,5].forEach(n => {
+      const opt = document.createElement('option');
+      opt.value = String(n);
+      opt.textContent = String(n);
+      if ((game.winPoints || WIN_POINTS) === n) opt.selected = true;
+      rounds.appendChild(opt);
+    });
+    rounds.onchange = () => {
+      const val = parseInt(rounds.value, 10) || WIN_POINTS;
+      game.winPoints = val;
+      encodeStateToURL(game);
+      updateScoreBar();
+    };
+    roundsRow.appendChild(roundsLabel);
+    roundsRow.appendChild(rounds);
+    wrap.appendChild(roundsRow);
+
     const startBtn = document.createElement('button');
     startBtn.className = 'primary';
     startBtn.textContent = 'Starta nytt spel';
@@ -346,6 +373,7 @@
         targetConfidence: 0,
         isActive: true,
         winner: '',
+        winPoints: parseInt(rounds.value, 10) || (game.winPoints || WIN_POINTS),
       };
       encodeStateToURL(game);
       renderDetect();
