@@ -9,6 +9,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:sy
 .score{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums}
 .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#121212;font-weight:700}
 .badge.win{border-color:#2fb07f;color:#36d399}
+.badge.active{border-color:#2fb07f;color:#36d399}
 .vs{color:var(--muted);font-weight:700}
 .screen{padding:16px;display:none}
 .screen.active{display:block}

@@ -165,9 +165,9 @@
   function updateScoreBar() {
     const aName = game.playerAName || 'Spelare A';
     const bName = game.playerBName || 'Spelare B';
-    const leader = game.playerAScore === game.playerBScore ? '' : (game.playerAScore > game.playerBScore ? 'A' : 'B');
-    const aClass = leader === 'A' ? 'badge win' : 'badge';
-    const bClass = leader === 'B' ? 'badge win' : 'badge';
+    const active = game.isActive ? (game.currentTurn === 'A' ? 'B' : 'A') : '';
+    const aClass = active === 'A' ? 'badge active' : 'badge';
+    const bClass = active === 'B' ? 'badge active' : 'badge';
     scoreBar.innerHTML = `
       <span class="${aClass}">${aName}<span class="vs"> ${game.playerAScore}<\/span><\/span>
       <span class="vs">vs<\/span>
@@ -596,10 +596,8 @@
     // currentTurn represents the current selector (who chose the target)
     // The guesser is the other player and earns points on success.
     if (game.currentTurn === 'A') {
-      if (success) game.playerBScore += 1; // B guessed
       game.currentTurn = 'B'; // Next, B selects
     } else {
-      if (success) game.playerAScore += 1; // A guessed
       game.currentTurn = 'A'; // Next, A selects
     }
     game.targetLabel = '';
