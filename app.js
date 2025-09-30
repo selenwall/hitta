@@ -209,11 +209,97 @@
     }
   }
 
+  async function checkCameraPermissions() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return { supported: false, error: 'getUserMedia stöds inte i denna webbläsare' };
+      }
+
+      // Check if we can query permissions
+      if (navigator.permissions) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'camera' });
+          console.log('Kamerabehörighet status:', permission.state);
+          
+          if (permission.state === 'denied') {
+            return { supported: true, error: 'Kamerabehörighet nekades. Klicka på kameran-ikonen i adressfältet och tillåt kameran.' };
+          }
+        } catch (e) {
+          console.log('Kunde inte kontrollera behörigheter:', e);
+        }
+      }
+
+      return { supported: true, error: null };
+    } catch (error) {
+      return { supported: false, error: error.message };
+    }
+  }
+
   async function startCamera(videoEl, facingMode = 'environment') {
     stopCamera();
-    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
-    videoEl.srcObject = mediaStream;
-    await videoEl.play();
+    
+    try {
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia stöds inte i denna webbläsare');
+      }
+
+      // Request camera permissions with more specific constraints
+      const constraints = {
+        video: {
+          facingMode: facingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+
+      console.log('Begär kamerabehörigheter...');
+      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      if (!mediaStream) {
+        throw new Error('Ingen mediaström mottagen');
+      }
+
+      videoEl.srcObject = mediaStream;
+      
+      // Wait for video to be ready
+      return new Promise((resolve, reject) => {
+        videoEl.onloadedmetadata = () => {
+          videoEl.play()
+            .then(() => {
+              console.log('Kamera startad framgångsrikt');
+              resolve();
+            })
+            .catch(reject);
+        };
+        
+        videoEl.onerror = (error) => {
+          console.error('Video fel:', error);
+          reject(new Error('Kunde inte spela upp video'));
+        };
+      });
+      
+    } catch (error) {
+      console.error('Kamerafel:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Kunde inte starta kamera. ';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage += 'Kamerabehörighet nekades. Klicka på kameran-ikonen i adressfältet och tillåt kameran.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage += 'Ingen kamera hittades. Kontrollera att en kamera är ansluten.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage += 'Kameran används av en annan applikation. Stäng andra appar som använder kameran.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage += 'Kamerainställningar stöds inte. Försök med en annan kamera.';
+      } else {
+        errorMessage += `Fel: ${error.message}`;
+      }
+      
+      throw new Error(errorMessage);
+    }
   }
 
   async function loadModel() {
@@ -330,6 +416,11 @@
     title.textContent = 'Starta eller gå med i spel';
     wrap.appendChild(title);
 
+    const cameraInfo = document.createElement('div');
+    cameraInfo.className = 'hint';
+    cameraInfo.innerHTML = '💡 <strong>Kameraproblem?</strong> Klicka på "Testa kamera" för att kontrollera behörigheter. Om kameran nekas, klicka på kameran-ikonen i adressfältet och välj "Tillåt".';
+    wrap.appendChild(cameraInfo);
+
     const nameRow = document.createElement('div');
     nameRow.className = 'col';
 
@@ -411,8 +502,62 @@
       if (game.targetLabel) renderPlay(); else renderDetect();
     };
 
+    const testCameraBtn = document.createElement('button');
+    testCameraBtn.className = 'ghost';
+    testCameraBtn.textContent = 'Testa kamera';
+    testCameraBtn.onclick = async () => {
+      const permissionCheck = await checkCameraPermissions();
+      if (!permissionCheck.supported) {
+        alert(permissionCheck.error);
+        return;
+      }
+      if (permissionCheck.error) {
+        alert(permissionCheck.error);
+        return;
+      }
+      
+      // Try to start camera for testing
+      const testVideo = document.createElement('video');
+      testVideo.style.width = '200px';
+      testVideo.style.height = '150px';
+      testVideo.style.border = '2px solid #333';
+      testVideo.style.margin = '10px';
+      
+      const testContainer = document.createElement('div');
+      testContainer.style.textAlign = 'center';
+      testContainer.style.margin = '20px 0';
+      
+      const statusDiv = document.createElement('div');
+      statusDiv.textContent = 'Testar kamera...';
+      testContainer.appendChild(statusDiv);
+      testContainer.appendChild(testVideo);
+      
+      // Insert after the main card
+      screens.home.appendChild(testContainer);
+      
+      try {
+        await startCamera(testVideo);
+        statusDiv.textContent = '✅ Kamera fungerar!';
+        statusDiv.style.color = 'green';
+        
+        // Remove test after 3 seconds
+        setTimeout(() => {
+          testContainer.remove();
+        }, 3000);
+      } catch (error) {
+        statusDiv.textContent = '❌ ' + error.message;
+        statusDiv.style.color = 'red';
+        
+        // Remove test after 5 seconds
+        setTimeout(() => {
+          testContainer.remove();
+        }, 5000);
+      }
+    };
+
     wrap.appendChild(startBtn);
     wrap.appendChild(joinBtn);
+    wrap.appendChild(testCameraBtn);
     screens.home.appendChild(wrap);
   }
 
@@ -567,8 +712,8 @@
         }
       }, 600);
     }).catch(err => {
-      console.error(err);
-      alert('Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
+      console.error('Kamerastart fel:', err);
+      alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
       setScreen('home');
     });
 
@@ -825,8 +970,8 @@
         }
       }, 600);
     }).catch(err => {
-      console.error(err);
-      alert('Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
+      console.error('Kamerastart fel:', err);
+      alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
       setScreen('home');
     });
 
