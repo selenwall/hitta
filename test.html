@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO Test</title>
+</head>
+<body>
+    <h1>YOLO Object Detection Test</h1>
+    <div id="status">Loading YOLO model...</div>
+    <video id="video" width="640" height="480" autoplay muted></video>
+    <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+    <div id="results"></div>
+
+    <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
+    <script>
+        let yoloModel = null;
+        const MIN_SCORE = 0.6;
+
+        async function loadYOLO() {
+            try {
+                yoloModel = await ml5.objectDetector('YOLO', { 
+                    filterBoxesThreshold: 0.01,
+                    IOUThreshold: 0.4,
+                    classProbThreshold: MIN_SCORE
+                });
+                document.getElementById('status').textContent = 'YOLO model loaded successfully!';
+                console.log('YOLO model loaded');
+            } catch (error) {
+                document.getElementById('status').textContent = 'Error loading YOLO model: ' + error.message;
+                console.error('Error loading YOLO model:', error);
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                await video.play();
+                document.getElementById('status').textContent = 'Camera started. Click "Detect" to test YOLO.';
+            } catch (error) {
+                document.getElementById('status').textContent = 'Error starting camera: ' + error.message;
+                console.error('Camera error:', error);
+            }
+        }
+
+        async function detectObjects() {
+            if (!yoloModel) {
+                alert('YOLO model not loaded yet');
+                return;
+            }
+
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Draw video frame to canvas
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            try {
+                const results = await new Promise((resolve, reject) => {
+                    yoloModel.detect(canvas, (err, results) => {
+                        if (err) reject(err);
+                        else resolve(results || []);
+                    });
+                });
+                
+                const filteredResults = results.filter(p => p.confidence > MIN_SCORE);
+                displayResults(filteredResults);
+            } catch (error) {
+                document.getElementById('results').innerHTML = 'Detection error: ' + error.message;
+                console.error('Detection error:', error);
+            }
+        }
+
+        function displayResults(results) {
+            const resultsDiv = document.getElementById('results');
+            if (results.length === 0) {
+                resultsDiv.innerHTML = 'No objects detected above 60% confidence';
+                return;
+            }
+            
+            let html = '<h3>Detected Objects:</h3><ul>';
+            results.forEach(result => {
+                html += `<li>${result.label}: ${(result.confidence * 100).toFixed(1)}%</li>`;
+            });
+            html += '</ul>';
+            resultsDiv.innerHTML = html;
+        }
+
+        // Initialize
+        loadYOLO();
+        startCamera();
+    </script>
+    
+    <br><br>
+    <button onclick="detectObjects()">Detect Objects</button>
+</body>
+</html>

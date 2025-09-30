@@ -22,6 +22,7 @@
 
   let game = { ...DEFAULT_GAME };
   let detectorModel = null;
+  let yoloModel = null;
   let mediaStream = null;
   let timerInterval = null;
   let secondsLeft = TURN_SECONDS;
@@ -216,10 +217,15 @@
   }
 
   async function loadModel() {
-    if (!detectorModel) {
-      detectorModel = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+    if (!yoloModel) {
+      // Load YOLO model using ml5.js
+      yoloModel = await ml5.objectDetector('YOLO', { 
+        filterBoxesThreshold: 0.01,
+        IOUThreshold: 0.4,
+        classProbThreshold: MIN_SCORE
+      });
     }
-    return detectorModel;
+    return yoloModel;
   }
 
   async function translateLabelToSv(label) {
@@ -469,7 +475,10 @@
       const scaleX = overlay.clientWidth && canvas.width ? overlay.clientWidth / canvas.width : 1;
       const scaleY = overlay.clientHeight && canvas.height ? overlay.clientHeight / canvas.height : 1;
       preds.forEach((p) => {
-        const [x, y, w, h] = p.bbox;
+        const x = p.x;
+        const y = p.y;
+        const w = p.width;
+        const h = p.height;
         const b = document.createElement('div');
         b.className = 'box';
         b.style.left = `${x * scaleX}px`;
@@ -477,8 +486,8 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
-        translateLabelToSv(p.class).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+        lab.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
+        translateLabelToSv(p.label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
         overlay.appendChild(b);
@@ -493,7 +502,10 @@
       const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
       const list = (preds || []).filter(p => p.score > MIN_SCORE);
       list.forEach((p) => {
-        const [x, y, w, h] = p.bbox;
+        const x = p.x;
+        const y = p.y;
+        const w = p.width;
+        const h = p.height;
         const b = document.createElement('div');
         b.className = 'box';
         b.style.left = `${x * scaleX}px`;
@@ -501,8 +513,8 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
-        translateLabelToSv(p.class).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+        lab.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
+        translateLabelToSv(p.label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = async (e) => {
           e.stopPropagation();
           try {
@@ -514,8 +526,8 @@
             video.style.display = 'none';
             canvas.style.display = 'block';
             stopCamera();
-            game.targetLabel = p.class;
-            game.targetConfidence = p.score;
+            game.targetLabel = p.label;
+            game.targetConfidence = p.confidence;
             game.isActive = true;
             game.winner = '';
             encodeStateToURL(game);
@@ -537,12 +549,17 @@
       stopLiveDetect();
       liveDetectInterval = setInterval(async () => {
         if (liveDetectInProgress) return;
-        if (!detectorModel) return;
+        if (!yoloModel) return;
         if (video.readyState < 2) return;
         try {
           liveDetectInProgress = true;
-          const preds = await detectorModel.detect(video);
-          drawLiveBoxes(preds || []);
+          const preds = await new Promise((resolve, reject) => {
+            yoloModel.detect(video, (err, results) => {
+              if (err) reject(err);
+              else resolve(results || []);
+            });
+          });
+          drawLiveBoxes(preds);
         } catch (e) {
           // ignore transient errors
         } finally {
@@ -565,8 +582,13 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         video.style.display = 'none';
         canvas.style.display = 'block';
-        const allPreds = await model.detect(canvas);
-        const preds = (allPreds || []).filter(p => p.score > MIN_SCORE);
+        const allPreds = await new Promise((resolve, reject) => {
+          model.detect(canvas, (err, results) => {
+            if (err) reject(err);
+            else resolve(results || []);
+          });
+        });
+        const preds = (allPreds || []).filter(p => p.confidence > MIN_SCORE);
         // Stop camera after capture
         stopCamera();
         if (!preds.length) {
@@ -594,11 +616,11 @@
         grid.className = 'grid';
         preds.slice(0, 6).forEach((p) => {
           const btn = document.createElement('button');
-          btn.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
-          translateLabelToSv(p.class).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+          btn.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
+          translateLabelToSv(p.label).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
           btn.onclick = async () => {
-            game.targetLabel = p.class;
-            game.targetConfidence = p.score;
+            game.targetLabel = p.label;
+            game.targetConfidence = p.confidence;
             game.isActive = true;
             game.winner = '';
             encodeStateToURL(game);
@@ -757,7 +779,10 @@
       const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
       const list = (preds || []).filter(p => p.score > MIN_SCORE);
       list.forEach((p) => {
-        const [x, y, w, h] = p.bbox;
+        const x = p.x;
+        const y = p.y;
+        const w = p.width;
+        const h = p.height;
         const b = document.createElement('div');
         b.className = 'box';
         b.style.left = `${x * scaleX}px`;
@@ -765,8 +790,8 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
-        translateLabelToSv(p.class).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+        lab.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
+        translateLabelToSv(p.label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
         b.appendChild(lab);
         overlay.appendChild(b);
       });
@@ -782,11 +807,16 @@
       stopLiveDetect();
       liveDetectInterval = setInterval(async () => {
         if (liveDetectInProgress) return;
-        if (!detectorModel) return;
+        if (!yoloModel) return;
         if (video.readyState < 2) return;
         try {
           liveDetectInProgress = true;
-          const preds = await detectorModel.detect(video);
+          const preds = await new Promise((resolve, reject) => {
+            yoloModel.detect(video, (err, results) => {
+              if (err) reject(err);
+              else resolve(results || []);
+            });
+          });
           drawLiveBoxes(preds || []);
         } catch (e) {
           // ignore transient detection errors
@@ -812,7 +842,10 @@
       const scaleX = overlay.clientWidth && canvas.width ? overlay.clientWidth / canvas.width : 1;
       const scaleY = overlay.clientHeight && canvas.height ? overlay.clientHeight / canvas.height : 1;
       preds.forEach((p) => {
-        const [x, y, w, h] = p.bbox;
+        const x = p.x;
+        const y = p.y;
+        const w = p.width;
+        const h = p.height;
         const b = document.createElement('div');
         b.className = 'box';
         b.style.left = `${x * scaleX}px`;
@@ -820,8 +853,8 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
-        translateLabelToSv(p.class).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+        lab.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
+        translateLabelToSv(p.label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
         overlay.appendChild(b);
@@ -837,8 +870,13 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         video.style.display = 'none';
         canvas.style.display = 'block';
-        const allPreds = await model.detect(canvas);
-        const preds = (allPreds || []).filter(p => p.score > MIN_SCORE);
+        const allPreds = await new Promise((resolve, reject) => {
+          model.detect(canvas, (err, results) => {
+            if (err) reject(err);
+            else resolve(results || []);
+          });
+        });
+        const preds = (allPreds || []).filter(p => p.confidence > MIN_SCORE);
         // Stop camera after capture so overlays don't double up
         stopCamera();
         if (!preds.length) {
@@ -856,7 +894,7 @@
           finishRound(success);
         };
         drawInteractiveBoxes(preds, (p) => {
-          const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
+          const success = p.label.toLowerCase() === (game.targetLabel||'').toLowerCase();
           clearInterval(timerInterval);
           awardOnce(success);
         });
@@ -870,10 +908,10 @@
         grid.className = 'grid';
         preds.slice(0, 6).forEach((p) => {
           const btn = document.createElement('button');
-          btn.textContent = `${(p.class || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`;
-          translateLabelToSv(p.class).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(p.score*100).toFixed(0)}%`; }).catch(() => {});
+          btn.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
+          translateLabelToSv(p.label).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
           btn.onclick = () => {
-            const success = p.class.toLowerCase() === (game.targetLabel||'').toLowerCase();
+            const success = p.label.toLowerCase() === (game.targetLabel||'').toLowerCase();
             clearInterval(timerInterval);
             awardOnce(success);
           };
