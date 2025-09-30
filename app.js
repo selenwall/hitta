@@ -742,7 +742,7 @@
       const vwRect = vw.getBoundingClientRect();
       const scaleX = vwRect.width && video.videoWidth ? vwRect.width / video.videoWidth : 1;
       const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
-      const list = (preds || []).filter(p => p.confidence > MIN_SCORE);
+      const list = (preds || []).filter(p => (p.confidence || p.score) > MIN_SCORE);
       list.forEach((p) => {
         // Handle both YOLO and COCO-SSD bounding box formats
         let x, y, w, h;
@@ -806,6 +806,7 @@
         try {
           liveDetectInProgress = true;
           const preds = await detectObjects(yoloModel, video);
+          console.log('Live detection result:', preds);
           drawLiveBoxes(preds);
         } catch (e) {
           // ignore transient errors
@@ -1021,7 +1022,7 @@
       const vwRect = vw.getBoundingClientRect();
       const scaleX = vwRect.width && video.videoWidth ? vwRect.width / video.videoWidth : 1;
       const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
-      const list = (preds || []).filter(p => p.confidence > MIN_SCORE);
+      const list = (preds || []).filter(p => (p.confidence || p.score) > MIN_SCORE);
       list.forEach((p) => {
         // Handle both YOLO and COCO-SSD bounding box formats
         let x, y, w, h;
