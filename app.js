@@ -1,5 +1,26 @@
 /* Minimal local-only SPA for itta! object identification game */
 (() => {
+  // Wait for all scripts to load before starting
+  function waitForScripts() {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const maxAttempts = 50; // 5 seconds max
+      
+      const checkScripts = () => {
+        attempts++;
+        if (typeof ml5 !== 'undefined' || typeof cocoSsd !== 'undefined') {
+          console.log('Skript laddade efter', attempts * 100, 'ms');
+          resolve();
+        } else if (attempts >= maxAttempts) {
+          console.warn('Timeout vid laddning av skript');
+          reject(new Error('Skript laddades inte inom 5 sekunder. Kontrollera din internetanslutning.'));
+        } else {
+          setTimeout(checkScripts, 100);
+        }
+      };
+      checkScripts();
+    });
+  }
   /** State management (URL-param based, no backend) */
   const DEFAULT_GAME = {
     playerAName: '',
@@ -322,6 +343,9 @@
     if (!yoloModel) {
       console.log('Försöker ladda objektigenkänningsmodell...');
       
+      // Wait for scripts to load first
+      await waitForScripts();
+      
       // Try YOLO first (ml5.js)
       if (typeof ml5 !== 'undefined' && ml5.objectDetector) {
         try {
@@ -465,6 +489,20 @@
     cameraInfo.innerHTML = '💡 <strong>Kameraproblem?</strong> Klicka på "Testa kamera" för att kontrollera behörigheter. Om kameran nekas, klicka på kameran-ikonen i adressfältet och välj "Tillåt".';
     wrap.appendChild(cameraInfo);
 
+    const loadingInfo = document.createElement('div');
+    loadingInfo.className = 'hint';
+    loadingInfo.id = 'loading-info';
+    loadingInfo.innerHTML = '⏳ <strong>Laddar AI-modeller...</strong> Detta kan ta några sekunder vid första besöket.';
+    wrap.appendChild(loadingInfo);
+
+    // Hide loading info after a delay or when model is loaded
+    setTimeout(() => {
+      const loadingEl = document.getElementById('loading-info');
+      if (loadingEl) {
+        loadingEl.style.display = 'none';
+      }
+    }, 3000);
+
     const nameRow = document.createElement('div');
     nameRow.className = 'col';
 
@@ -572,7 +610,7 @@
       testContainer.style.margin = '20px 0';
       
       const statusDiv = document.createElement('div');
-      statusDiv.textContent = 'Testar kamera...';
+      statusDiv.textContent = 'Testar kamera och AI-modeller...';
       testContainer.appendChild(statusDiv);
       testContainer.appendChild(testVideo);
       
@@ -580,8 +618,13 @@
       screens.home.appendChild(testContainer);
       
       try {
+        // Test model loading first
+        statusDiv.textContent = 'Laddar AI-modell...';
+        const model = await loadModel();
+        statusDiv.textContent = 'AI-modell laddad, testar kamera...';
+        
         await startCamera(testVideo);
-        statusDiv.textContent = '✅ Kamera fungerar!';
+        statusDiv.textContent = '✅ Kamera och AI fungerar!';
         statusDiv.style.color = 'green';
         
         // Remove test after 3 seconds
