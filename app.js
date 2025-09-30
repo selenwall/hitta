@@ -302,14 +302,58 @@
     }
   }
 
+  async function detectObjects(model, input) {
+    // Handle both YOLO (callback-based) and COCO-SSD (promise-based) formats
+    if (model.detect && typeof model.detect === 'function' && model.detect.length === 2) {
+      // YOLO format (callback-based)
+      return new Promise((resolve, reject) => {
+        model.detect(input, (err, results) => {
+          if (err) reject(err);
+          else resolve(results || []);
+        });
+      });
+    } else {
+      // COCO-SSD format (promise-based)
+      return await model.detect(input);
+    }
+  }
+
   async function loadModel() {
     if (!yoloModel) {
-      // Load YOLO model using ml5.js
-      yoloModel = await ml5.objectDetector('YOLO', { 
-        filterBoxesThreshold: 0.01,
-        IOUThreshold: 0.4,
-        classProbThreshold: MIN_SCORE
-      });
+      console.log('Försöker ladda objektigenkänningsmodell...');
+      
+      // Try YOLO first (ml5.js)
+      if (typeof ml5 !== 'undefined' && ml5.objectDetector) {
+        try {
+          console.log('Laddar YOLO-modell...');
+          yoloModel = await ml5.objectDetector('YOLO', { 
+            filterBoxesThreshold: 0.01,
+            IOUThreshold: 0.4,
+            classProbThreshold: MIN_SCORE
+          });
+          console.log('YOLO-modell laddad framgångsrikt');
+          return yoloModel;
+        } catch (error) {
+          console.warn('YOLO-modell misslyckades, försöker COCO-SSD:', error);
+        }
+      } else {
+        console.warn('ml5.js inte tillgängligt, försöker COCO-SSD');
+      }
+      
+      // Fallback to COCO-SSD
+      if (typeof cocoSsd !== 'undefined') {
+        try {
+          console.log('Laddar COCO-SSD-modell som fallback...');
+          yoloModel = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+          console.log('COCO-SSD-modell laddad framgångsrikt');
+          return yoloModel;
+        } catch (error) {
+          console.error('COCO-SSD-modell misslyckades:', error);
+        }
+      }
+      
+      // If both fail
+      throw new Error('Kunde inte ladda någon objektigenkänningsmodell. Kontrollera din internetanslutning och ladda om sidan.');
     }
     return yoloModel;
   }
@@ -620,10 +664,18 @@
       const scaleX = overlay.clientWidth && canvas.width ? overlay.clientWidth / canvas.width : 1;
       const scaleY = overlay.clientHeight && canvas.height ? overlay.clientHeight / canvas.height : 1;
       preds.forEach((p) => {
-        const x = p.x;
-        const y = p.y;
-        const w = p.width;
-        const h = p.height;
+        // Handle both YOLO and COCO-SSD bounding box formats
+        let x, y, w, h;
+        if (p.bbox && Array.isArray(p.bbox)) {
+          // COCO-SSD format: [x, y, width, height]
+          [x, y, w, h] = p.bbox;
+        } else {
+          // YOLO format: {x, y, width, height}
+          x = p.x;
+          y = p.y;
+          w = p.width;
+          h = p.height;
+        }
         const b = document.createElement('div');
         b.className = 'box';
         b.style.left = `${x * scaleX}px`;
@@ -631,8 +683,10 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
-        translateLabelToSv(p.label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
+        const label = p.label || p.class || '';
+        const confidence = p.confidence || p.score || 0;
+        lab.textContent = `${label.toUpperCase()} ${(confidence*100).toFixed(0)}%`;
+        translateLabelToSv(label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(confidence*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
         overlay.appendChild(b);
@@ -647,10 +701,18 @@
       const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
       const list = (preds || []).filter(p => p.confidence > MIN_SCORE);
       list.forEach((p) => {
-        const x = p.x;
-        const y = p.y;
-        const w = p.width;
-        const h = p.height;
+        // Handle both YOLO and COCO-SSD bounding box formats
+        let x, y, w, h;
+        if (p.bbox && Array.isArray(p.bbox)) {
+          // COCO-SSD format: [x, y, width, height]
+          [x, y, w, h] = p.bbox;
+        } else {
+          // YOLO format: {x, y, width, height}
+          x = p.x;
+          y = p.y;
+          w = p.width;
+          h = p.height;
+        }
         const b = document.createElement('div');
         b.className = 'box';
         b.style.left = `${x * scaleX}px`;
@@ -658,8 +720,10 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
-        translateLabelToSv(p.label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
+        const label = p.label || p.class || '';
+        const confidence = p.confidence || p.score || 0;
+        lab.textContent = `${label.toUpperCase()} ${(confidence*100).toFixed(0)}%`;
+        translateLabelToSv(label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(confidence*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = async (e) => {
           e.stopPropagation();
           try {
@@ -671,8 +735,8 @@
             video.style.display = 'none';
             canvas.style.display = 'block';
             stopCamera();
-            game.targetLabel = p.label;
-            game.targetConfidence = p.confidence;
+            game.targetLabel = p.label || p.class || '';
+            game.targetConfidence = p.confidence || p.score || 0;
             game.isActive = true;
             game.winner = '';
             encodeStateToURL(game);
@@ -698,12 +762,7 @@
         if (video.readyState < 2) return;
         try {
           liveDetectInProgress = true;
-          const preds = await new Promise((resolve, reject) => {
-            yoloModel.detect(video, (err, results) => {
-              if (err) reject(err);
-              else resolve(results || []);
-            });
-          });
+          const preds = await detectObjects(yoloModel, video);
           drawLiveBoxes(preds);
         } catch (e) {
           // ignore transient errors
@@ -727,13 +786,8 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         video.style.display = 'none';
         canvas.style.display = 'block';
-        const allPreds = await new Promise((resolve, reject) => {
-          model.detect(canvas, (err, results) => {
-            if (err) reject(err);
-            else resolve(results || []);
-          });
-        });
-        const preds = (allPreds || []).filter(p => p.confidence > MIN_SCORE);
+        const allPreds = await detectObjects(model, canvas);
+        const preds = (allPreds || []).filter(p => (p.confidence || p.score) > MIN_SCORE);
         // Stop camera after capture
         stopCamera();
         if (!preds.length) {
@@ -761,11 +815,13 @@
         grid.className = 'grid';
         preds.slice(0, 6).forEach((p) => {
           const btn = document.createElement('button');
-          btn.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
-          translateLabelToSv(p.label).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
+          const label = p.label || p.class || '';
+          const confidence = p.confidence || p.score || 0;
+          btn.textContent = `${label.toUpperCase()} ${(confidence*100).toFixed(0)}%`;
+          translateLabelToSv(label).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(confidence*100).toFixed(0)}%`; }).catch(() => {});
           btn.onclick = async () => {
-            game.targetLabel = p.label;
-            game.targetConfidence = p.confidence;
+            game.targetLabel = p.label || p.class || '';
+            game.targetConfidence = p.confidence || p.score || 0;
             game.isActive = true;
             game.winner = '';
             encodeStateToURL(game);
@@ -924,10 +980,18 @@
       const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
       const list = (preds || []).filter(p => p.confidence > MIN_SCORE);
       list.forEach((p) => {
-        const x = p.x;
-        const y = p.y;
-        const w = p.width;
-        const h = p.height;
+        // Handle both YOLO and COCO-SSD bounding box formats
+        let x, y, w, h;
+        if (p.bbox && Array.isArray(p.bbox)) {
+          // COCO-SSD format: [x, y, width, height]
+          [x, y, w, h] = p.bbox;
+        } else {
+          // YOLO format: {x, y, width, height}
+          x = p.x;
+          y = p.y;
+          w = p.width;
+          h = p.height;
+        }
         const b = document.createElement('div');
         b.className = 'box';
         b.style.left = `${x * scaleX}px`;
@@ -935,8 +999,10 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
-        translateLabelToSv(p.label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
+        const label = p.label || p.class || '';
+        const confidence = p.confidence || p.score || 0;
+        lab.textContent = `${label.toUpperCase()} ${(confidence*100).toFixed(0)}%`;
+        translateLabelToSv(label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(confidence*100).toFixed(0)}%`; }).catch(() => {});
         b.appendChild(lab);
         overlay.appendChild(b);
       });
@@ -956,12 +1022,7 @@
         if (video.readyState < 2) return;
         try {
           liveDetectInProgress = true;
-          const preds = await new Promise((resolve, reject) => {
-            yoloModel.detect(video, (err, results) => {
-              if (err) reject(err);
-              else resolve(results || []);
-            });
-          });
+          const preds = await detectObjects(yoloModel, video);
           drawLiveBoxes(preds || []);
         } catch (e) {
           // ignore transient detection errors
@@ -987,10 +1048,18 @@
       const scaleX = overlay.clientWidth && canvas.width ? overlay.clientWidth / canvas.width : 1;
       const scaleY = overlay.clientHeight && canvas.height ? overlay.clientHeight / canvas.height : 1;
       preds.forEach((p) => {
-        const x = p.x;
-        const y = p.y;
-        const w = p.width;
-        const h = p.height;
+        // Handle both YOLO and COCO-SSD bounding box formats
+        let x, y, w, h;
+        if (p.bbox && Array.isArray(p.bbox)) {
+          // COCO-SSD format: [x, y, width, height]
+          [x, y, w, h] = p.bbox;
+        } else {
+          // YOLO format: {x, y, width, height}
+          x = p.x;
+          y = p.y;
+          w = p.width;
+          h = p.height;
+        }
         const b = document.createElement('div');
         b.className = 'box';
         b.style.left = `${x * scaleX}px`;
@@ -998,8 +1067,10 @@
         b.style.width = `${w * scaleX}px`;
         b.style.height = `${h * scaleY}px`;
         const lab = document.createElement('label');
-        lab.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
-        translateLabelToSv(p.label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
+        const label = p.label || p.class || '';
+        const confidence = p.confidence || p.score || 0;
+        lab.textContent = `${label.toUpperCase()} ${(confidence*100).toFixed(0)}%`;
+        translateLabelToSv(label).then(sv => { lab.textContent = `${(sv || '').toUpperCase()} ${(confidence*100).toFixed(0)}%`; }).catch(() => {});
         lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
         b.appendChild(lab);
         overlay.appendChild(b);
@@ -1015,13 +1086,8 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         video.style.display = 'none';
         canvas.style.display = 'block';
-        const allPreds = await new Promise((resolve, reject) => {
-          model.detect(canvas, (err, results) => {
-            if (err) reject(err);
-            else resolve(results || []);
-          });
-        });
-        const preds = (allPreds || []).filter(p => p.confidence > MIN_SCORE);
+        const allPreds = await detectObjects(model, canvas);
+        const preds = (allPreds || []).filter(p => (p.confidence || p.score) > MIN_SCORE);
         // Stop camera after capture so overlays don't double up
         stopCamera();
         if (!preds.length) {
@@ -1039,7 +1105,8 @@
           finishRound(success);
         };
         drawInteractiveBoxes(preds, (p) => {
-          const success = p.label.toLowerCase() === (game.targetLabel||'').toLowerCase();
+          const label = p.label || p.class || '';
+          const success = label.toLowerCase() === (game.targetLabel||'').toLowerCase();
           clearInterval(timerInterval);
           awardOnce(success);
         });
@@ -1053,10 +1120,13 @@
         grid.className = 'grid';
         preds.slice(0, 6).forEach((p) => {
           const btn = document.createElement('button');
-          btn.textContent = `${(p.label || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
-          translateLabelToSv(p.label).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(p.confidence*100).toFixed(0)}%`; }).catch(() => {});
+          const label = p.label || p.class || '';
+          const confidence = p.confidence || p.score || 0;
+          btn.textContent = `${label.toUpperCase()} ${(confidence*100).toFixed(0)}%`;
+          translateLabelToSv(label).then(sv => { btn.textContent = `${(sv || '').toUpperCase()} ${(confidence*100).toFixed(0)}%`; }).catch(() => {});
           btn.onclick = () => {
-            const success = p.label.toLowerCase() === (game.targetLabel||'').toLowerCase();
+            const label = p.label || p.class || '';
+          const success = label.toLowerCase() === (game.targetLabel||'').toLowerCase();
             clearInterval(timerInterval);
             awardOnce(success);
           };
