@@ -500,7 +500,7 @@
       const vwRect = vw.getBoundingClientRect();
       const scaleX = vwRect.width && video.videoWidth ? vwRect.width / video.videoWidth : 1;
       const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
-      const list = (preds || []).filter(p => p.score > MIN_SCORE);
+      const list = (preds || []).filter(p => p.confidence > MIN_SCORE);
       list.forEach((p) => {
         const x = p.x;
         const y = p.y;
@@ -596,8 +596,8 @@
           return;
         }
         drawInteractiveBoxes(preds, async (p) => {
-          game.targetLabel = p.class;
-          game.targetConfidence = p.score;
+          game.targetLabel = p.label;
+          game.targetConfidence = p.confidence;
           game.isActive = true;
           game.winner = '';
           encodeStateToURL(game);
@@ -777,7 +777,7 @@
       const vwRect = vw.getBoundingClientRect();
       const scaleX = vwRect.width && video.videoWidth ? vwRect.width / video.videoWidth : 1;
       const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
-      const list = (preds || []).filter(p => p.score > MIN_SCORE);
+      const list = (preds || []).filter(p => p.confidence > MIN_SCORE);
       list.forEach((p) => {
         const x = p.x;
         const y = p.y;
