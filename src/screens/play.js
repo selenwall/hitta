@@ -193,6 +193,15 @@ export function renderPlay() {
       stopCamera();
       if (!preds.length) {
         alert('Inga objekt över 60% hittades. Försök igen.');
+        video.style.display = '';
+        canvas.style.display = 'none';
+        await startCamera(video);
+        startLiveDetect(async () => {
+          const model = getModel();
+          if (!model || video.readyState < 2) return;
+          const preds = await detectObjects(model, video);
+          drawLiveBoxes(preds || []);
+        });
         return;
       }
 
