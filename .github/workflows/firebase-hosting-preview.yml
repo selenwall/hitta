@@ -1,0 +1,22 @@
+name: Deploy PR Preview to Firebase Hosting
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: hitta-3f1fb
+          expires: 7d
