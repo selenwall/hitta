@@ -1,22 +1,20 @@
 import { store } from '../store.js';
-import { navigate } from '../router.js';
-import { encodeStateToURL } from '../urlState.js';
 import { updateScoreBar, setScreen, screens, showFeedbackPlusOne } from '../ui.js';
 import { startCamera, stopCamera, stopLiveDetect, startLiveDetect } from '../camera.js';
 import { loadModel, detectObjects, getModel } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
 import { MIN_SCORE, WIN_POINTS, TURN_SECONDS } from '../constants.js';
 import { resetTimer, startTimer, stopTimer, formatTime } from '../timer.js';
+import { updateGame } from '../firebase.js';
 
 function parseBbox(p) {
   if (p.bbox && Array.isArray(p.bbox)) return p.bbox;
   return [p.x, p.y, p.width, p.height];
 }
 
-function checkWinner() {
-  const target = store.game.winPoints || WIN_POINTS;
-  if (store.game.playerAScore >= target) return 'A';
-  if (store.game.playerBScore >= target) return 'B';
+function computeWinner(aScore, bScore, winPoints) {
+  if (aScore >= winPoints) return 'A';
+  if (bScore >= winPoints) return 'B';
   return '';
 }
 
@@ -68,22 +66,18 @@ export function renderPlay() {
   giveUp.className = 'ghost';
   giveUp.textContent = 'Ge upp';
 
-  try {
-    if (store.game.gameId && localStorage.getItem('itta_owner_gid') === store.game.gameId) {
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'danger';
-      cancelBtn.textContent = 'Avbryt spel';
-      cancelBtn.onclick = () => {
-        stopTimer();
-        stopCamera();
-        store.game.isActive = false;
-        store.game.canceledBy = store.game.playerAName || 'Spelare A';
-        encodeStateToURL(store.game);
-        navigate('cancel');
-      };
-      actions.appendChild(cancelBtn);
-    }
-  } catch {}
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'danger';
+  cancelBtn.textContent = 'Avbryt spel';
+  cancelBtn.onclick = async () => {
+    cancelBtn.disabled = true;
+    stopTimer();
+    stopCamera();
+    stopLiveDetect();
+    const canceledBy = store.myRole === 'A' ? store.game.playerAName : store.game.playerBName;
+    await updateGame(store.gameId, { status: 'canceled', canceledBy });
+  };
+  actions.appendChild(cancelBtn);
 
   actions.appendChild(timerEl);
   actions.appendChild(snap);
@@ -93,14 +87,37 @@ export function renderPlay() {
 
   const ctx = canvas.getContext('2d');
 
-  function finishRound() {
-    store.game.currentTurn = store.game.currentTurn === 'A' ? 'B' : 'A';
-    store.game.targetLabel = '';
-    store.game.targetConfidence = 0;
-    const w = checkWinner();
-    store.game.winner = w;
-    encodeStateToURL(store.game);
-    navigate(w ? 'win' : 'detect');
+  async function finishRound(success) {
+    if (roundAwarded) return;
+    roundAwarded = true;
+
+    stopTimer();
+    stopCamera();
+    stopLiveDetect();
+
+    let { playerAScore, playerBScore, currentTurn, winPoints } = store.game;
+    winPoints = winPoints || WIN_POINTS;
+
+    if (success) {
+      // Finder scores: when turn='A' (A challenges), B is the finder
+      if (currentTurn === 'A') playerBScore += 1;
+      else playerAScore += 1;
+      showFeedbackPlusOne();
+    }
+
+    const newTurn = currentTurn === 'A' ? 'B' : 'A';
+    const winner = computeWinner(playerAScore, playerBScore, winPoints);
+
+    // Write round result to Firebase — listener on both devices handles navigation
+    await updateGame(store.gameId, {
+      playerAScore,
+      playerBScore,
+      currentTurn: newTurn,
+      targetLabel: '',
+      targetConfidence: 0,
+      status: winner ? 'won' : 'playing',
+      winner,
+    });
   }
 
   const drawLiveBoxes = (preds) => {
@@ -158,8 +175,7 @@ export function renderPlay() {
   startCamera(video).then(loadModel).then(() => {
     resetTimer();
     startTimer(() => {
-      stopCamera();
-      finishRound();
+      finishRound(false);
     });
     startLiveDetect(async () => {
       const model = getModel();
@@ -173,11 +189,7 @@ export function renderPlay() {
     setScreen('home');
   });
 
-  giveUp.onclick = () => {
-    stopTimer();
-    stopCamera();
-    finishRound();
-  };
+  giveUp.onclick = () => finishRound(false);
 
   snap.onclick = async () => {
     try {
@@ -205,22 +217,9 @@ export function renderPlay() {
         return;
       }
 
-      const awardOnce = (success) => {
-        if (roundAwarded) return;
-        roundAwarded = true;
-        if (success) {
-          if (store.game.currentTurn === 'A') store.game.playerBScore += 1;
-          else store.game.playerAScore += 1;
-          updateScoreBar();
-          showFeedbackPlusOne();
-        }
-        stopTimer();
-        finishRound();
-      };
-
       drawInteractiveBoxes(preds, (p) => {
         const label = p.label || p.class || '';
-        awardOnce(label.toLowerCase() === (store.game.targetLabel || '').toLowerCase());
+        finishRound(label.toLowerCase() === (store.game.targetLabel || '').toLowerCase());
       });
 
       const chooser = document.createElement('div');
@@ -240,7 +239,7 @@ export function renderPlay() {
         }).catch(() => {});
         btn.onclick = () => {
           const lbl = p.label || p.class || '';
-          awardOnce(lbl.toLowerCase() === (store.game.targetLabel || '').toLowerCase());
+          finishRound(lbl.toLowerCase() === (store.game.targetLabel || '').toLowerCase());
         };
         grid.appendChild(btn);
       });

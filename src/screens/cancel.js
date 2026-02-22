@@ -1,6 +1,6 @@
 import { store } from '../store.js';
 import { navigate } from '../router.js';
-import { encodeStateToURL } from '../urlState.js';
+import { setGameIdInURL } from '../urlState.js';
 import { updateScoreBar, setScreen, screens } from '../ui.js';
 import { DEFAULT_GAME } from '../constants.js';
 
@@ -13,7 +13,7 @@ export function renderCancel() {
   c.className = 'center card';
 
   const msg = document.createElement('h2');
-  msg.textContent = `${store.game.canceledBy || 'Spelare A'} avbröt spelet`;
+  msg.textContent = `${store.game.canceledBy || 'Spelaren'} avbröt spelet`;
 
   const info = document.createElement('div');
   info.className = 'notice';
@@ -23,10 +23,13 @@ export function renderCancel() {
   home.className = 'primary';
   home.textContent = 'Till startsidan';
   home.onclick = () => {
+    if (store.unsubscribe) { store.unsubscribe(); store.unsubscribe = null; }
     const pa = store.game.playerAName || 'Spelare A';
     const pb = store.game.playerBName || 'Spelare B';
     store.game = { ...DEFAULT_GAME, playerAName: pa, playerBName: pb };
-    encodeStateToURL(store.game);
+    store.gameId = '';
+    store.myRole = null;
+    setGameIdInURL('');
     navigate('home');
   };
 

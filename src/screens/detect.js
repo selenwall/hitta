@@ -1,11 +1,10 @@
 import { store } from '../store.js';
-import { navigate } from '../router.js';
-import { encodeStateToURL } from '../urlState.js';
-import { updateScoreBar, setScreen, screens, shareLink } from '../ui.js';
+import { updateScoreBar, setScreen, screens } from '../ui.js';
 import { startCamera, stopCamera, stopLiveDetect, startLiveDetect } from '../camera.js';
 import { loadModel, detectObjects, getModel } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
 import { MIN_SCORE } from '../constants.js';
+import { updateGame } from '../firebase.js';
 
 function buildBox(x, y, w, h, scaleX, scaleY, label, confidence) {
   const b = document.createElement('div');
@@ -62,20 +61,15 @@ export function renderDetect() {
   snap.className = 'primary';
   snap.textContent = 'Ta bild';
 
-  try {
-    if (store.game.gameId && localStorage.getItem('itta_owner_gid') === store.game.gameId) {
-      const cancel = document.createElement('button');
-      cancel.className = 'danger';
-      cancel.textContent = 'Avbryt spel';
-      cancel.onclick = () => {
-        store.game.isActive = false;
-        store.game.canceledBy = store.game.playerAName || 'Spelare A';
-        encodeStateToURL(store.game);
-        navigate('cancel');
-      };
-      actions.appendChild(cancel);
-    }
-  } catch {}
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'danger';
+  cancelBtn.textContent = 'Avbryt spel';
+  cancelBtn.onclick = async () => {
+    cancelBtn.disabled = true;
+    const canceledBy = store.myRole === 'A' ? store.game.playerAName : store.game.playerBName;
+    await updateGame(store.gameId, { status: 'canceled', canceledBy });
+  };
+  actions.appendChild(cancelBtn);
 
   actions.appendChild(snap);
   container.appendChild(actions);
@@ -132,15 +126,10 @@ export function renderDetect() {
   };
 
   async function pickTarget(p) {
-    store.game.targetLabel = p.label || p.class || '';
-    store.game.targetConfidence = p.confidence || p.score || 0;
-    store.game.isActive = true;
-    store.game.winner = '';
-    encodeStateToURL(store.game);
-    const sv = await translateLabelToSv(store.game.targetLabel);
-    const text = `${store.game.playerAName} utmanar ${store.game.playerBName} att hitta: ${(sv || '').toUpperCase()}. Ställning ${store.game.playerAScore}-${store.game.playerBScore}.`;
-    await shareLink(text);
-    navigate('wait');
+    const targetLabel = p.label || p.class || '';
+    const targetConfidence = p.confidence || p.score || 0;
+    // Write chosen target to Firebase — the listener on both devices handles navigation
+    await updateGame(store.gameId, { targetLabel, targetConfidence });
   }
 
   startCamera(video).then(loadModel).then(() => {
