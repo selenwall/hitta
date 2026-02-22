@@ -7,6 +7,6 @@ export const FIREBASE_CONFIG = {
   databaseURL: 'https://hitta-3f1fb-default-rtdb.firebaseio.com',
   projectId: 'hitta-3f1fb',
   storageBucket: 'hitta-3f1fb.appspot.com',
-  messagingSenderId: 'YOUR_SENDER_ID',
+  messagingSenderId: '566563427329',
   appId: 'YOUR_APP_ID',
 };
