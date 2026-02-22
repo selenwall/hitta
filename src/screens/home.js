@@ -1,67 +1,54 @@
 import { store } from '../store.js';
-import { navigate } from '../router.js';
-import { encodeStateToURL } from '../urlState.js';
+import { navigate, startSubscription } from '../router.js';
+import { setGameIdInURL } from '../urlState.js';
 import { updateScoreBar, setScreen, screens } from '../ui.js';
 import { checkCameraPermissions, startCamera } from '../camera.js';
 import { loadModel } from '../detector.js';
 import { WIN_POINTS } from '../constants.js';
-
-function isOwner() {
-  try {
-    return store.game.gameId && localStorage.getItem('itta_owner_gid') === store.game.gameId;
-  } catch {
-    return false;
-  }
-}
+import { createGame, updateGame, getGame } from '../firebase.js';
 
 export function renderHome() {
   updateScoreBar();
   setScreen('home');
-  const hasActive = store.game.isActive;
   screens.home.innerHTML = '';
 
+  // If there is a game ID but no role, this is Player B accepting an invite
+  if (store.gameId && !store.myRole) {
+    renderAcceptInvite();
+  } else {
+    renderCreateGame();
+  }
+}
+
+function renderCreateGame() {
   const wrap = document.createElement('div');
   wrap.className = 'col card';
 
   const title = document.createElement('h2');
-  title.textContent = 'Starta eller gå med i spel';
+  title.textContent = 'Nytt spel';
   wrap.appendChild(title);
 
   const cameraInfo = document.createElement('div');
   cameraInfo.className = 'hint';
-  cameraInfo.innerHTML = '💡 <strong>Kameraproblem?</strong> Klicka på "Testa kamera" för att kontrollera behörigheter. Om kameran nekas, klicka på kameran-ikonen i adressfältet och välj "Tillåt".';
+  cameraInfo.innerHTML = '💡 <strong>Kameraproblem?</strong> Klicka på "Testa kamera" för att kontrollera behörigheter.';
   wrap.appendChild(cameraInfo);
-
-  const loadingInfo = document.createElement('div');
-  loadingInfo.className = 'hint';
-  loadingInfo.id = 'loading-info';
-  loadingInfo.innerHTML = '⏳ <strong>Laddar AI-modeller...</strong> Detta kan ta några sekunder vid första besöket.';
-  wrap.appendChild(loadingInfo);
-  setTimeout(() => {
-    document.getElementById('loading-info')?.remove();
-  }, 3000);
-
-  const nameRow = document.createElement('div');
-  nameRow.className = 'col';
 
   const nameA = document.createElement('input');
   nameA.placeholder = 'Ditt namn';
   nameA.value = store.game.playerAName || '';
   nameA.autocapitalize = 'words';
   nameA.autocomplete = 'name';
+  wrap.appendChild(nameA);
 
   const nameB = document.createElement('input');
-  nameB.placeholder = 'Motspelarens namn (om du startar)';
+  nameB.placeholder = 'Motspelaren namn';
   nameB.value = store.game.playerBName || '';
-
-  nameRow.appendChild(nameA);
-  nameRow.appendChild(nameB);
-  wrap.appendChild(nameRow);
+  wrap.appendChild(nameB);
 
   const roundsRow = document.createElement('div');
   roundsRow.className = 'row';
   const roundsLabel = document.createElement('label');
-  roundsLabel.textContent = 'Spelomgångar (först till):';
+  roundsLabel.textContent = 'Poäng att vinna:';
   const rounds = document.createElement('select');
   [1, 3, 5].forEach(n => {
     const opt = document.createElement('option');
@@ -70,62 +57,74 @@ export function renderHome() {
     if ((store.game.winPoints || WIN_POINTS) === n) opt.selected = true;
     rounds.appendChild(opt);
   });
-  rounds.onchange = () => {
-    store.game.winPoints = parseInt(rounds.value, 10) || WIN_POINTS;
-    encodeStateToURL(store.game);
-    updateScoreBar();
-  };
   roundsRow.appendChild(roundsLabel);
   roundsRow.appendChild(rounds);
-  if (!hasActive) wrap.appendChild(roundsRow);
+  wrap.appendChild(roundsRow);
 
-  const startBtn = document.createElement('button');
-  startBtn.className = 'primary';
-  startBtn.textContent = 'Starta nytt spel';
-  startBtn.onclick = () => {
-    const gid = Math.random().toString(36).slice(2, 10);
-    try { localStorage.setItem('itta_owner_gid', gid); } catch {}
-    store.game = {
-      ...store.game,
-      playerAName: nameA.value.trim() || 'Spelare A',
-      playerBName: nameB.value.trim() || 'Spelare B',
+  const sendBtn = document.createElement('button');
+  sendBtn.className = 'primary';
+  sendBtn.textContent = 'Skicka spelinbjudan';
+  sendBtn.onclick = async () => {
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Skapar spel...';
+
+    const playerAName = nameA.value.trim() || 'Spelare A';
+    const playerBName = nameB.value.trim() || 'Spelare B';
+    const winPoints = parseInt(rounds.value, 10) || WIN_POINTS;
+    const gameId = Math.random().toString(36).slice(2, 10);
+
+    try { localStorage.setItem(`hitta_role_${gameId}`, 'A'); } catch {}
+    store.myRole = 'A';
+    store.gameId = gameId;
+
+    await createGame(gameId, {
+      playerAName,
+      playerBName,
       playerAScore: 0,
       playerBScore: 0,
       currentTurn: 'A',
       targetLabel: '',
       targetConfidence: 0,
-      isActive: true,
+      status: 'inviting',
       winner: '',
-      winPoints: parseInt(rounds.value, 10) || (store.game.winPoints || WIN_POINTS),
+      winPoints,
       canceledBy: '',
-      gameId: gid,
-    };
-    encodeStateToURL(store.game);
-    navigate('detect');
-  };
+      createdAt: Date.now(),
+    });
 
-  const joinBtn = document.createElement('button');
-  joinBtn.className = 'ghost';
-  joinBtn.textContent = hasActive ? 'Fortsätt' : 'Gå med i spel via länk';
-  joinBtn.onclick = () => {
-    if (!hasActive) {
-      store.game.playerBName = nameA.value.trim() || store.game.playerBName || 'Spelare B';
-      store.game.playerAName = store.game.playerAName || 'Spelare A';
-      store.game.isActive = true;
-      encodeStateToURL(store.game);
+    setGameIdInURL(gameId);
+
+    // Start Firebase subscription — it will navigate to 'wait' once data arrives
+    startSubscription(gameId);
+
+    // Share the invite link
+    const url = location.href;
+    const text = `${playerAName} utmanar dig till Hitta! – Objektduellen. Öppna länken för att acceptera:`;
+    if (navigator.share) {
+      navigator.share({ title: 'Hitta! – Inbjudan', text, url }).catch(() => {});
+    } else {
+      const smsUrl = `sms:?&body=${encodeURIComponent(`${text} ${url}`)}`;
+      const opened = window.open(smsUrl, '_blank');
+      if (!opened) {
+        const wa = `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`;
+        const openedWa = window.open(wa, '_blank');
+        if (!openedWa && navigator.clipboard?.writeText) {
+          try {
+            await navigator.clipboard.writeText(`${text} ${url}`);
+            alert('Inbjudningslänk kopierad! Klistra in i valfri app.');
+          } catch {}
+        }
+      }
     }
-    navigate(store.game.targetLabel ? 'play' : 'detect');
   };
+  wrap.appendChild(sendBtn);
 
   const testCameraBtn = document.createElement('button');
   testCameraBtn.className = 'ghost';
   testCameraBtn.textContent = 'Testa kamera';
   testCameraBtn.onclick = async () => {
     const check = await checkCameraPermissions();
-    if (!check.supported || check.error) {
-      alert(check.error);
-      return;
-    }
+    if (!check.supported || check.error) { alert(check.error); return; }
     const testVideo = document.createElement('video');
     testVideo.style.cssText = 'width:200px;height:150px;border:2px solid #333;margin:10px';
     const testContainer = document.createElement('div');
@@ -149,9 +148,57 @@ export function renderHome() {
       setTimeout(() => testContainer.remove(), 5000);
     }
   };
-
-  wrap.appendChild(startBtn);
-  wrap.appendChild(joinBtn);
   wrap.appendChild(testCameraBtn);
+  screens.home.appendChild(wrap);
+}
+
+async function renderAcceptInvite() {
+  screens.home.innerHTML = '<div class="center card"><div>Laddar inbjudan...</div></div>';
+
+  const game = await getGame(store.gameId);
+  if (!game) {
+    screens.home.innerHTML = '<div class="center card"><div>Spelet hittades inte. Kontrollera länken.</div></div>';
+    return;
+  }
+
+  // If game is already canceled or finished, show appropriate message
+  if (game.status === 'canceled' || game.status === 'won') {
+    screens.home.innerHTML = '<div class="center card"><div>Det här spelet är redan avslutat.</div></div>';
+    return;
+  }
+
+  screens.home.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'col card';
+
+  const title = document.createElement('h2');
+  title.textContent = `${game.playerAName} bjuder in dig!`;
+  wrap.appendChild(title);
+
+  const sub = document.createElement('div');
+  sub.className = 'hint';
+  sub.textContent = `Spelomgångar: ${game.winPoints}`;
+  wrap.appendChild(sub);
+
+  const nameInput = document.createElement('input');
+  nameInput.placeholder = 'Ditt namn';
+  nameInput.value = game.playerBName || '';
+  nameInput.autocapitalize = 'words';
+  nameInput.autocomplete = 'name';
+  wrap.appendChild(nameInput);
+
+  const acceptBtn = document.createElement('button');
+  acceptBtn.className = 'primary';
+  acceptBtn.textContent = 'Acceptera inbjudan';
+  acceptBtn.onclick = async () => {
+    acceptBtn.disabled = true;
+    acceptBtn.textContent = 'Accepterar...';
+    const playerBName = nameInput.value.trim() || 'Spelare B';
+    try { localStorage.setItem(`hitta_role_${store.gameId}`, 'B'); } catch {}
+    store.myRole = 'B';
+    await updateGame(store.gameId, { playerBName, status: 'accepted' });
+    // Firebase listener (already set up in route()) will navigate to 'wait'
+  };
+  wrap.appendChild(acceptBtn);
   screens.home.appendChild(wrap);
 }

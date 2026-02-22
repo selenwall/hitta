@@ -22,7 +22,8 @@ export function setScreen(name) {
 export function updateScoreBar() {
   const aName = store.game.playerAName || 'Spelare A';
   const bName = store.game.playerBName || 'Spelare B';
-  const active = store.game.isActive ? (store.game.currentTurn === 'A' ? 'B' : 'A') : '';
+  const isPlaying = store.game.status === 'playing' || store.game.isActive;
+  const active = isPlaying ? (store.game.currentTurn === 'A' ? 'B' : 'A') : '';
   const aClass = active === 'A' ? 'badge active' : 'badge';
   const bClass = active === 'B' ? 'badge active' : 'badge';
   scoreBar.innerHTML = `
@@ -44,7 +45,7 @@ export async function shareLink(text) {
   const url = location.href;
   const full = `${text} ${url}`.trim();
   if (navigator.share) {
-    navigator.share({ title: 'itta! utmaning', text, url }).catch(() => {});
+    navigator.share({ title: 'Hitta! – Inbjudan', text, url }).catch(() => {});
     return;
   }
   const sms = `sms:?&body=${encodeURIComponent(full)}`;
