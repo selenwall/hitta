@@ -39,7 +39,7 @@
 
   const WIN_POINTS = 5; // default fallback if not set in state
   const TURN_SECONDS = 120; // 2 minutes
-  const MIN_SCORE = 0.6; // Only show objects > 60%
+  const MIN_SCORE = 0.3; // Lower threshold for small objects (30%)
 
   let game = { ...DEFAULT_GAME };
   let detectorModel = null;
@@ -136,6 +136,138 @@
     'teddy bear': 'nallebjörn',
     'hair drier': 'hårtork',
     toothbrush: 'tandborste',
+    // Additional small objects
+    pencil: 'penna',
+    pen: 'penna',
+    eraser: 'suddgummi',
+    ruler: 'linjal',
+    calculator: 'miniräknare',
+    watch: 'klocka',
+    glasses: 'glasögon',
+    'wrist watch': 'armbandsur',
+    'digital watch': 'digital klocka',
+    'alarm clock': 'väckarklocka',
+    'wall clock': 'väggklocka',
+    'desk lamp': 'bordslampa',
+    'table lamp': 'bordslampa',
+    'floor lamp': 'golvlampa',
+    'ceiling fan': 'takfläkt',
+    'desk fan': 'bordsfläkt',
+    'electric fan': 'elektrisk fläkt',
+    'hair dryer': 'hårtork',
+    'electric razor': 'elektrisk rakapparat',
+    'electric toothbrush': 'elektrisk tandborste',
+    'nail clipper': 'nagelklippare',
+    'tweezers': 'pincett',
+    'stapler': 'häftapparat',
+    'paper clip': 'gem',
+    'binder clip': 'binders',
+    'rubber band': 'gummisnodd',
+    'tape dispenser': 'tejpdispenser',
+    'hole punch': 'hålslag',
+    'pencil sharpener': 'pennal',
+    'marker': 'markeringspenna',
+    'highlighter': 'markeringspenna',
+    'crayon': 'krita',
+    'chalk': 'krita',
+    'paintbrush': 'pensel',
+    'palette': 'palett',
+    'canvas': 'duk',
+    'easel': 'staffli',
+    'sculpture': 'skulptur',
+    'figurine': 'figur',
+    'toy': 'leksak',
+    'doll': 'docka',
+    'action figure': 'actionfigur',
+    'puzzle piece': 'pusselbit',
+    'dice': 'tärning',
+    'playing card': 'spelkort',
+    'coin': 'mynt',
+    'key': 'nyckel',
+    'keychain': 'nyckelring',
+    'wallet': 'plånbok',
+    'purse': 'handväska',
+    'clutch': 'clutch',
+    'tote bag': 'tygväska',
+    'briefcase': 'portfölj',
+    'duffel bag': 'sportväska',
+    'gym bag': 'träningsväska',
+    'lunch box': 'lunchlåda',
+    'thermos': 'termos',
+    'water bottle': 'vattenflaska',
+    'coffee mug': 'kaffemugg',
+    'tea cup': 'tekopp',
+    'shot glass': 'shotglas',
+    'champagne glass': 'champagneglas',
+    'beer glass': 'ölglas',
+    'cocktail glass': 'cocktailglas',
+    'martini glass': 'martiniglas',
+    'highball glass': 'highballglas',
+    'lowball glass': 'lowballglas',
+    'brandy snifter': 'konjakskupa',
+    'whiskey glass': 'whiskyglas',
+    'tumbler': 'tumbler',
+    'goblet': 'bägare',
+    'pitcher': 'kanna',
+    'carafe': 'karaff',
+    'decanter': 'karaff',
+    'ice bucket': 'isbuckla',
+    'ice tongs': 'istång',
+    'ice scoop': 'isslev',
+    'bottle opener': 'flasköppnare',
+    'cork screw': 'korkskruv',
+    'wine opener': 'vinkork',
+    'can opener': 'burköppnare',
+    'jar opener': 'burköppnare',
+    'peeler': 'skalare',
+    'grater': 'rivjärn',
+    'slicer': 'skivare',
+    'chopper': 'hackare',
+    'masher': 'mosare',
+    'whisk': 'visp',
+    'spatula': 'stekspade',
+    'turner': 'stekspade',
+    'ladle': 'slev',
+    'butter knife': 'smörkniv',
+    'steak knife': 'kotlettkniv',
+    'bread knife': 'brödkniv',
+    'chef knife': 'kökskniv',
+    'paring knife': 'skalkniv',
+    'cleaver': 'hackkniv',
+    'santoku knife': 'santokukniv',
+    'boning knife': 'benkniv',
+    'fillet knife': 'filékniv',
+    'utility knife': 'allmänkniv',
+    'serrated knife': 'sågad kniv',
+    'honing steel': 'honingstål',
+    'cutting board': 'skärbräda',
+    'chopping board': 'hackbräda',
+    'serving board': 'serveringsbräda',
+    'cheese board': 'ostbräda',
+    'charcuterie board': 'charcuteriebräda',
+    'bread board': 'brödbräda',
+    'meat board': 'köttbräda',
+    'fish board': 'fiskbräda',
+    'vegetable board': 'grönsaksbräda',
+    'fruit board': 'fruktbräda',
+    'dessert board': 'dessertbräda',
+    'appetizer board': 'förrättsbräda',
+    'snack board': 'snacksbräda',
+    'party board': 'festbräda',
+    'picnic board': 'picknickbräda',
+    'camping board': 'campingbräda',
+    'outdoor board': 'utomhusbräda',
+    'indoor board': 'inomhusbräda',
+    'kitchen board': 'köksbräda',
+    'dining board': 'matbräda',
+    'coffee board': 'kaffebräda',
+    'tea board': 'tebräda',
+    'wine board': 'vinbräda',
+    'cheese knife': 'ostkniv',
+    'spread knife': 'bredkniv',
+    'serving knife': 'serveringskniv',
+    'cake knife': 'tårtkniv',
+    'pie knife': 'pajkniv',
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -265,12 +397,12 @@
         throw new Error('getUserMedia stöds inte i denna webbläsare');
       }
 
-      // Request camera permissions with more specific constraints
+      // Request camera permissions with higher resolution for small objects
       const constraints = {
         video: {
           facingMode: facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: 1920 },  // Higher resolution for small objects
+          height: { ideal: 1080 }
         },
         audio: false
       };
@@ -339,6 +471,112 @@
     }
   }
 
+  // Enhanced detection for small objects using multi-scale approach
+  async function detectObjectsEnhanced(model, input) {
+    try {
+      // First, try normal detection
+      const results = await detectObjects(model, input);
+      
+      // If we have a canvas input, try multi-scale detection for small objects
+      if (input instanceof HTMLCanvasElement) {
+        const enhancedResults = await detectObjectsMultiScale(model, input);
+        // Combine and deduplicate results
+        return combineDetectionResults(results, enhancedResults);
+      }
+      
+      return results;
+    } catch (error) {
+      console.warn('Enhanced detection failed, falling back to normal detection:', error);
+      return await detectObjects(model, input);
+    }
+  }
+
+  // Multi-scale detection for better small object detection
+  async function detectObjectsMultiScale(model, canvas) {
+    const scales = [1.2, 0.8]; // Try slightly larger and smaller scales
+    const allResults = [];
+    
+    for (const scale of scales) {
+      try {
+        const scaledCanvas = document.createElement('canvas');
+        const ctx = scaledCanvas.getContext('2d');
+        const newWidth = Math.floor(canvas.width * scale);
+        const newHeight = Math.floor(canvas.height * scale);
+        
+        scaledCanvas.width = newWidth;
+        scaledCanvas.height = newHeight;
+        
+        // Draw scaled image
+        ctx.drawImage(canvas, 0, 0, newWidth, newHeight);
+        
+        // Detect on scaled image
+        const scaledResults = await detectObjects(model, scaledCanvas);
+        
+        // Scale bounding boxes back to original size
+        const scaledBackResults = scaledResults.map(result => {
+          const scaledResult = { ...result };
+          if (scaledResult.bbox) {
+            scaledResult.bbox = scaledResult.bbox.map(coord => coord / scale);
+          } else if (scaledResult.x !== undefined) {
+            scaledResult.x = scaledResult.x / scale;
+            scaledResult.y = scaledResult.y / scale;
+            scaledResult.width = scaledResult.width / scale;
+            scaledResult.height = scaledResult.height / scale;
+          }
+          return scaledResult;
+        });
+        
+        allResults.push(...scaledBackResults);
+      } catch (error) {
+        console.warn(`Multi-scale detection failed for scale ${scale}:`, error);
+      }
+    }
+    
+    return allResults;
+  }
+
+  // Combine and deduplicate detection results
+  function combineDetectionResults(original, enhanced) {
+    const combined = [...original];
+    
+    for (const enhancedResult of enhanced) {
+      // Check if this result is too similar to existing ones
+      const isDuplicate = combined.some(existing => {
+        const threshold = 0.3; // IoU threshold for considering duplicates
+        return calculateIoU(existing, enhancedResult) > threshold;
+      });
+      
+      if (!isDuplicate && (enhancedResult.confidence || enhancedResult.score) > MIN_SCORE) {
+        combined.push(enhancedResult);
+      }
+    }
+    
+    return combined;
+  }
+
+  // Calculate Intersection over Union for duplicate detection
+  function calculateIoU(box1, box2) {
+    let x1, y1, w1, h1, x2, y2, w2, h2;
+    
+    if (box1.bbox && box2.bbox) {
+      [x1, y1, w1, h1] = box1.bbox;
+      [x2, y2, w2, h2] = box2.bbox;
+    } else {
+      x1 = box1.x || 0; y1 = box1.y || 0; w1 = box1.width || 0; h1 = box1.height || 0;
+      x2 = box2.x || 0; y2 = box2.y || 0; w2 = box2.width || 0; h2 = box2.height || 0;
+    }
+    
+    const intersectionX = Math.max(0, Math.min(x1 + w1, x2 + w2) - Math.max(x1, x2));
+    const intersectionY = Math.max(0, Math.min(y1 + h1, y2 + h2) - Math.max(y1, y2));
+    const intersection = intersectionX * intersectionY;
+    
+    const area1 = w1 * h1;
+    const area2 = w2 * h2;
+    const union = area1 + area2 - intersection;
+    
+    return union > 0 ? intersection / union : 0;
+  }
+
   async function loadModel() {
     if (!yoloModel) {
       console.log('Försöker ladda objektigenkänningsmodell...');
@@ -353,7 +591,9 @@
           yoloModel = await ml5.objectDetector('YOLO', { 
             filterBoxesThreshold: 0.01,
             IOUThreshold: 0.4,
-            classProbThreshold: MIN_SCORE
+            classProbThreshold: MIN_SCORE,
+            inputSize: 640,  // Higher input resolution
+            scoreThreshold: MIN_SCORE
           });
           console.log('YOLO-modell laddad framgångsrikt');
           return yoloModel;
@@ -368,7 +608,10 @@
       if (typeof cocoSsd !== 'undefined') {
         try {
           console.log('Laddar COCO-SSD-modell som fallback...');
-          yoloModel = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+          yoloModel = await cocoSsd.load({ 
+            base: 'mobilenet_v2',  // Better than lite_mobilenet_v2 for small objects
+            inputResolution: { width: 640, height: 640 }  // Higher resolution
+          });
           console.log('COCO-SSD-modell laddad framgångsrikt');
           return yoloModel;
         } catch (error) {
@@ -830,7 +1073,7 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         video.style.display = 'none';
         canvas.style.display = 'block';
-        const allPreds = await detectObjects(model, canvas);
+        const allPreds = await detectObjectsEnhanced(model, canvas);
         const preds = (allPreds || []).filter(p => (p.confidence || p.score) > MIN_SCORE);
         // Stop camera after capture
         stopCamera();
@@ -1130,7 +1373,7 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         video.style.display = 'none';
         canvas.style.display = 'block';
-        const allPreds = await detectObjects(model, canvas);
+        const allPreds = await detectObjectsEnhanced(model, canvas);
         const preds = (allPreds || []).filter(p => (p.confidence || p.score) > MIN_SCORE);
         // Stop camera after capture so overlays don't double up
         stopCamera();
