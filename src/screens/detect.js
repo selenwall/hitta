@@ -5,6 +5,7 @@ import { loadModel, detectObjects, getModel } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
 import { MIN_SCORE } from '../constants.js';
 import { updateGame } from '../firebase.js';
+import { navigate } from '../router.js';
 
 function buildBox(x, y, w, h, scaleX, scaleY, label, confidence) {
   const b = document.createElement('div');
@@ -128,8 +129,9 @@ export function renderDetect() {
   async function pickTarget(p) {
     const targetLabel = p.label || p.class || '';
     const targetConfidence = p.confidence || p.score || 0;
-    // Write chosen target to Firebase — the listener on both devices handles navigation
     await updateGame(store.gameId, { targetLabel, targetConfidence });
+    // Navigate immediately — don't wait for the next subscription poll cycle
+    navigate('wait');
   }
 
   startCamera(video).then(loadModel).then(() => {

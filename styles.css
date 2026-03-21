@@ -41,6 +41,9 @@ video, canvas{width:100%;height:auto;display:block}
 .center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;margin-top:10vh}
 .pill{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:999px;padding:6px 10px;color:var(--muted);font-size:12px}
 .name{font-weight:700}
+.challenge-pill{display:flex;align-items:center;justify-content:center;gap:8px;border:2px solid var(--accent);border-radius:999px;padding:10px 20px;font-size:14px;background:rgba(54,211,153,0.08);font-weight:600;color:var(--fg)}
+.challenge-pill .name{font-size:24px;font-weight:900;color:var(--accent);letter-spacing:1px}
+.timer-display{font-variant-numeric:tabular-nums;font-weight:900;font-size:22px;border:2px solid var(--accent);border-radius:999px;padding:8px 16px;min-width:80px;text-align:center;background:rgba(54,211,153,0.1);color:var(--accent)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
 .notice{background:#1b1b1b;border:1px solid var(--border);padding:12px 14px;border-radius:10px}

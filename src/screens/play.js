@@ -30,8 +30,8 @@ export function renderPlay() {
   container.className = 'col';
 
   const pill = document.createElement('div');
-  pill.className = 'pill';
-  pill.innerHTML = `<span>Hitta: <span class="name">${(store.game.targetLabel || '').toUpperCase()}</span></span>`;
+  pill.className = 'challenge-pill';
+  pill.innerHTML = `Hitta: <span class="name">${(store.game.targetLabel || '').toUpperCase()}</span>`;
   translateLabelToSv(store.game.targetLabel).then(sv => {
     const span = pill.querySelector('.name');
     if (span && sv) span.textContent = (sv || '').toUpperCase();
@@ -56,7 +56,7 @@ export function renderPlay() {
   const actions = document.createElement('div');
   actions.className = 'footer-actions';
   const timerEl = document.createElement('div');
-  timerEl.className = 'pill timer';
+  timerEl.className = 'timer-display';
   timerEl.id = 'play-timer';
   timerEl.textContent = formatTime(TURN_SECONDS);
   const snap = document.createElement('button');
