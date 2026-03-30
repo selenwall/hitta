@@ -96,7 +96,7 @@ export function route() {
   if (gameId) {
     store.gameId = gameId;
     try {
-      store.myRole = localStorage.getItem(`hitta_role_${gameId}`) || null;
+      store.myRole = sessionStorage.getItem(`hitta_role_${gameId}`) || null;
     } catch {
       store.myRole = null;
     }
