@@ -204,19 +204,20 @@ async function renderAcceptInvite() {
     const playerBName = nameInput.value.trim() || 'Spelare B';
     try { sessionStorage.setItem(`hitta_role_${store.gameId}`, 'B'); } catch {}
     store.myRole = 'B';
-    try {
-      await updateGame(store.gameId, { playerBName, status: 'accepted' });
-      // Optimistic update so wait screen renders correctly without waiting for poll
-      store.game = { ...store.game, playerBName, status: 'accepted' };
-      navigate('wait');
-    } catch (err) {
-      console.error('Failed to accept invite:', err);
-      acceptBtn.disabled = false;
-      acceptBtn.textContent = 'Acceptera inbjudan';
-      store.myRole = null;
-      try { sessionStorage.removeItem(`hitta_role_${store.gameId}`); } catch {}
-      alert('Kunde inte acceptera inbjudan. Försök igen.');
+    // Optimistic: navigate immediately so UI doesn't hang
+    store.game = { ...store.game, playerBName, status: 'accepted' };
+    navigate('wait');
+    // Update server in background with retry
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await updateGame(store.gameId, { playerBName, status: 'accepted' });
+        return; // success
+      } catch (err) {
+        console.error(`Accept attempt ${attempt + 1} failed:`, err);
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
     }
+    console.error('All accept attempts failed');
   };
   wrap.appendChild(acceptBtn);
   screens.home.appendChild(wrap);
