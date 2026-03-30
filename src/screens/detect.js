@@ -143,8 +143,18 @@ export function renderDetect() {
     });
   }).catch(err => {
     console.error('Kamerastart fel:', err);
-    alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
-    setScreen('home');
+    screens.detect.innerHTML = '';
+    const errWrap = document.createElement('div');
+    errWrap.className = 'center card';
+    const errMsg = document.createElement('p');
+    errMsg.textContent = err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.';
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'primary';
+    retryBtn.textContent = 'Försök igen';
+    retryBtn.onclick = () => renderDetect();
+    errWrap.appendChild(errMsg);
+    errWrap.appendChild(retryBtn);
+    screens.detect.appendChild(errWrap);
   });
 
   snap.onclick = async () => {
