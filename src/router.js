@@ -34,14 +34,27 @@ function routeFromGame(game) {
     return;
   }
 
+  // If the local store has a more advanced status (optimistic update),
+  // don't let a stale poll response overwrite it
+  const statusOrder = { inviting: 0, accepted: 1, playing: 2, won: 3, canceled: 3 };
+  const serverRank = statusOrder[game.status] ?? -1;
+  const localRank = statusOrder[store.game.status] ?? -1;
+  const effectiveStatus = serverRank >= localRank ? game.status : store.game.status;
+
   // Merge Firebase data into store; keep isActive in sync for legacy helpers
-  store.game = { ...store.game, ...game, isActive: game.status === 'playing' };
+  store.game = { ...store.game, ...game, status: effectiveStatus, isActive: effectiveStatus === 'playing' };
   updateScoreBar();
 
   const myRole = store.myRole;
   let targetScreen;
 
-  switch (game.status) {
+  // If we have no role, send user to home to join/create
+  if (!myRole) {
+    if (currentScreen !== 'home') navigate('home');
+    return;
+  }
+
+  switch (effectiveStatus) {
     case 'inviting':
       targetScreen = myRole === 'A' ? 'wait' : 'home';
       break;
@@ -96,7 +109,7 @@ export function route() {
   if (gameId) {
     store.gameId = gameId;
     try {
-      store.myRole = localStorage.getItem(`hitta_role_${gameId}`) || null;
+      store.myRole = sessionStorage.getItem(`hitta_role_${gameId}`) || null;
     } catch {
       store.myRole = null;
     }

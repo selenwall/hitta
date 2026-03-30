@@ -73,24 +73,32 @@ function renderCreateGame() {
     const winPoints = parseInt(rounds.value, 10) || WIN_POINTS;
     const gameId = Math.random().toString(36).slice(2, 10);
 
-    try { localStorage.setItem(`hitta_role_${gameId}`, 'A'); } catch {}
+    try {
+      await createGame(gameId, {
+        playerAName,
+        playerBName,
+        playerAScore: 0,
+        playerBScore: 0,
+        currentTurn: 'A',
+        targetLabel: '',
+        targetConfidence: 0,
+        status: 'inviting',
+        winner: '',
+        winPoints,
+        canceledBy: '',
+        createdAt: Date.now(),
+      });
+    } catch (err) {
+      console.error('Failed to create game:', err);
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Skicka spelinbjudan';
+      alert('Kunde inte skapa spelet. Försök igen.');
+      return;
+    }
+
+    try { sessionStorage.setItem(`hitta_role_${gameId}`, 'A'); } catch {}
     store.myRole = 'A';
     store.gameId = gameId;
-
-    await createGame(gameId, {
-      playerAName,
-      playerBName,
-      playerAScore: 0,
-      playerBScore: 0,
-      currentTurn: 'A',
-      targetLabel: '',
-      targetConfidence: 0,
-      status: 'inviting',
-      winner: '',
-      winPoints,
-      canceledBy: '',
-      createdAt: Date.now(),
-    });
 
     setGameIdInURL(gameId);
 
@@ -194,12 +202,22 @@ async function renderAcceptInvite() {
     acceptBtn.disabled = true;
     acceptBtn.textContent = 'Accepterar...';
     const playerBName = nameInput.value.trim() || 'Spelare B';
-    try { localStorage.setItem(`hitta_role_${store.gameId}`, 'B'); } catch {}
+    try { sessionStorage.setItem(`hitta_role_${store.gameId}`, 'B'); } catch {}
     store.myRole = 'B';
-    // Optimistic update so wait screen renders correctly without waiting for poll
+    // Optimistic: navigate immediately so UI doesn't hang
     store.game = { ...store.game, playerBName, status: 'accepted' };
-    await updateGame(store.gameId, { playerBName, status: 'accepted' });
     navigate('wait');
+    // Update server in background with retry
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await updateGame(store.gameId, { playerBName, status: 'accepted' });
+        return; // success
+      } catch (err) {
+        console.error(`Accept attempt ${attempt + 1} failed:`, err);
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+    console.error('All accept attempts failed');
   };
   wrap.appendChild(acceptBtn);
   screens.home.appendChild(wrap);
