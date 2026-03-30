@@ -48,6 +48,12 @@ function routeFromGame(game) {
   const myRole = store.myRole;
   let targetScreen;
 
+  // If we have no role, send user to home to join/create
+  if (!myRole) {
+    if (currentScreen !== 'home') navigate('home');
+    return;
+  }
+
   switch (effectiveStatus) {
     case 'inviting':
       targetScreen = myRole === 'A' ? 'wait' : 'home';
