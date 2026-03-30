@@ -196,8 +196,10 @@ async function renderAcceptInvite() {
     const playerBName = nameInput.value.trim() || 'Spelare B';
     try { localStorage.setItem(`hitta_role_${store.gameId}`, 'B'); } catch {}
     store.myRole = 'B';
+    // Optimistic update so wait screen renders correctly without waiting for poll
+    store.game = { ...store.game, playerBName, status: 'accepted' };
     await updateGame(store.gameId, { playerBName, status: 'accepted' });
-    // Firebase listener (already set up in route()) will navigate to 'wait'
+    navigate('wait');
   };
   wrap.appendChild(acceptBtn);
   screens.home.appendChild(wrap);
