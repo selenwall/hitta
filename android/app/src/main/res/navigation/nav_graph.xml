@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/homeFragment">
+
+    <fragment
+        android:id="@+id/homeFragment"
+        android:name="com.hitta.app.ui.home.HomeFragment"
+        android:label="@string/screen_home"
+        tools:layout="@layout/fragment_home">
+
+        <argument
+            android:name="gameId"
+            app:argType="string"
+            app:nullable="true"
+            android:defaultValue="@null" />
+
+        <argument
+            android:name="inviteMode"
+            app:argType="boolean"
+            android:defaultValue="false" />
+
+        <action
+            android:id="@+id/action_homeFragment_to_waitFragment"
+            app:destination="@id/waitFragment" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/waitFragment"
+        android:name="com.hitta.app.ui.wait.WaitFragment"
+        android:label="@string/screen_wait"
+        tools:layout="@layout/fragment_wait">
+
+        <argument
+            android:name="gameId"
+            app:argType="string" />
+
+        <argument
+            android:name="myRole"
+            app:argType="string" />
+
+        <action
+            android:id="@+id/action_waitFragment_to_detectFragment"
+            app:destination="@id/detectFragment"
+            app:popUpTo="@id/waitFragment"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_waitFragment_to_playFragment"
+            app:destination="@id/playFragment"
+            app:popUpTo="@id/waitFragment"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_waitFragment_to_winFragment"
+            app:destination="@id/winFragment"
+            app:popUpTo="@id/nav_graph"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_waitFragment_to_cancelFragment"
+            app:destination="@id/cancelFragment"
+            app:popUpTo="@id/nav_graph"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_waitFragment_to_homeFragment"
+            app:destination="@id/homeFragment"
+            app:popUpTo="@id/nav_graph"
+            app:popUpToInclusive="true" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/detectFragment"
+        android:name="com.hitta.app.ui.detect.DetectFragment"
+        android:label="@string/screen_detect"
+        tools:layout="@layout/fragment_detect">
+
+        <argument
+            android:name="gameId"
+            app:argType="string" />
+
+        <argument
+            android:name="myRole"
+            app:argType="string" />
+
+        <action
+            android:id="@+id/action_detectFragment_to_waitFragment"
+            app:destination="@id/waitFragment"
+            app:popUpTo="@id/detectFragment"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_detectFragment_to_winFragment"
+            app:destination="@id/winFragment"
+            app:popUpTo="@id/nav_graph"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_detectFragment_to_cancelFragment"
+            app:destination="@id/cancelFragment"
+            app:popUpTo="@id/nav_graph"
+            app:popUpToInclusive="true" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/playFragment"
+        android:name="com.hitta.app.ui.play.PlayFragment"
+        android:label="@string/screen_play"
+        tools:layout="@layout/fragment_play">
+
+        <argument
+            android:name="gameId"
+            app:argType="string" />
+
+        <argument
+            android:name="myRole"
+            app:argType="string" />
+
+        <action
+            android:id="@+id/action_playFragment_to_waitFragment"
+            app:destination="@id/waitFragment"
+            app:popUpTo="@id/playFragment"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_playFragment_to_winFragment"
+            app:destination="@id/winFragment"
+            app:popUpTo="@id/nav_graph"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_playFragment_to_cancelFragment"
+            app:destination="@id/cancelFragment"
+            app:popUpTo="@id/nav_graph"
+            app:popUpToInclusive="true" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/winFragment"
+        android:name="com.hitta.app.ui.win.WinFragment"
+        android:label="@string/screen_win"
+        tools:layout="@layout/fragment_win">
+
+        <action
+            android:id="@+id/action_winFragment_to_homeFragment"
+            app:destination="@id/homeFragment"
+            app:popUpTo="@id/nav_graph"
+            app:popUpToInclusive="true" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/cancelFragment"
+        android:name="com.hitta.app.ui.cancel.CancelFragment"
+        android:label="@string/screen_cancel"
+        tools:layout="@layout/fragment_cancel">
+
+        <argument
+            android:name="gameId"
+            app:argType="string"
+            app:nullable="true"
+            android:defaultValue="@null" />
+
+        <argument
+            android:name="myRole"
+            app:argType="string"
+            app:nullable="true"
+            android:defaultValue="@null" />
+
+        <action
+            android:id="@+id/action_cancelFragment_to_homeFragment"
+            app:destination="@id/homeFragment"
+            app:popUpTo="@id/nav_graph"
+            app:popUpToInclusive="true" />
+
+    </fragment>
+
+</navigation>
