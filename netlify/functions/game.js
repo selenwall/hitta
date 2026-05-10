@@ -1,6 +1,6 @@
 import { getStore } from "@netlify/blobs";
 
-function json(body, status = 200) {
+function json(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -8,6 +8,7 @@ function json(body, status = 200) {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
+      ...extra,
     },
   });
 }
@@ -35,7 +36,7 @@ export default async (req) => {
 
   if (req.method === "GET") {
     const data = await store.get(gameId, { type: "json" });
-    return json(data || null);
+    return json(data || null, 200, { "Cache-Control": "no-store" });
   }
 
   if (req.method === "POST") {

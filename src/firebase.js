@@ -25,7 +25,7 @@ export async function updateGame(gameId, updates) {
 // loop to call back with null (which routes both players home) rather than
 // retrying on a known-missing game.
 export async function getGame(gameId) {
-  const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`);
+  const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, { cache: 'no-store' });
   if (!res.ok) return null;
   return res.json();
 }
