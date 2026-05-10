@@ -1,7 +1,7 @@
 export const WIN_POINTS = 5;
 export const TURN_SECONDS = 120;
 export const MIN_SCORE = 0.6;
-export const POLL_MS = 1500;
+export const POLL_MS = 800;
 export const LIVE_DETECT_MS = 600;
 
 export const DEFAULT_GAME = {

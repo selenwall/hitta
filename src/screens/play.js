@@ -103,7 +103,6 @@ export function renderPlay() {
     const newTurn = currentTurn === 'A' ? 'B' : 'A';
     const winner = computeWinner(playerAScore, playerBScore, winPoints);
 
-    // Write round result — subscription on both devices handles navigation
     await updateGame(store.gameId, {
       playerAScore,
       playerBScore,
@@ -113,6 +112,10 @@ export function renderPlay() {
       status: winner ? 'won' : 'playing',
       winner,
     });
+
+    // Navigate immediately — the finder always becomes the next challenger.
+    // The other player's subscription handles their side within POLL_MS.
+    navigate(winner ? 'win' : 'detect');
   }
 
   const drawLiveBoxes = (preds) => {

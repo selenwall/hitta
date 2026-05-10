@@ -1,4 +1,5 @@
 import { store } from '../store.js';
+import { navigate } from '../router.js';
 import { updateScoreBar, setScreen, screens } from '../ui.js';
 import { stopCamera } from '../camera.js';
 import { translateLabelToSv } from '../translations.js';
@@ -43,6 +44,8 @@ export function renderWait() {
     startBtn.onclick = async () => {
       startBtn.disabled = true;
       await updateGame(gameId, { status: 'playing' });
+      // Navigate immediately — the other player's subscription handles their side.
+      navigate('detect');
     };
     c.appendChild(startBtn);
     c.appendChild(makeCancelBtn(game, gameId, myRole));
