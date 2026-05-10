@@ -1,3 +1,5 @@
+import { LIVE_DETECT_MS } from './constants.js';
+
 let mediaStream = null;
 let activeRAF = 0;
 let liveDetectInterval = null;
@@ -94,5 +96,5 @@ export function startLiveDetect(fn) {
     } finally {
       liveDetectInProgress = false;
     }
-  }, 600);
+  }, LIVE_DETECT_MS);
 }

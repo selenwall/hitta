@@ -1,5 +1,4 @@
-// URL state is now minimal — only the game ID is stored in the URL.
-// All other game state lives in Firebase Realtime Database.
+// Only the game ID is stored in the URL; all other game state lives in Netlify Blobs.
 
 export function getGameIdFromURL() {
   return new URL(location.href).searchParams.get('gid') || '';

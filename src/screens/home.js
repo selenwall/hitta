@@ -89,7 +89,7 @@ function renderCreateGame() {
         createdAt: Date.now(),
       });
     } catch (err) {
-      console.error('Failed to create game:', err);
+      console.error('Kunde inte skapa spelet:', err);
       sendBtn.disabled = false;
       sendBtn.textContent = 'Skicka spelinbjudan';
       alert('Kunde inte skapa spelet. Försök igen.');
@@ -102,7 +102,6 @@ function renderCreateGame() {
 
     setGameIdInURL(gameId);
 
-    // Start Firebase subscription — it will navigate to 'wait' once data arrives
     startSubscription(gameId);
 
     // Share the invite link
@@ -213,11 +212,11 @@ async function renderAcceptInvite() {
         await updateGame(store.gameId, { playerBName, status: 'accepted' });
         return; // success
       } catch (err) {
-        console.error(`Accept attempt ${attempt + 1} failed:`, err);
+        console.error(`Accepteringsförsök ${attempt + 1} misslyckades:`, err);
         if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
       }
     }
-    console.error('All accept attempts failed');
+    console.error('Alla accepteringsförsök misslyckades');
   };
   wrap.appendChild(acceptBtn);
   screens.home.appendChild(wrap);

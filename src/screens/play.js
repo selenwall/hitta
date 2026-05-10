@@ -1,16 +1,12 @@
 import { store } from '../store.js';
-import { updateScoreBar, setScreen, screens, showFeedbackPlusOne } from '../ui.js';
+import { updateScoreBar, setScreen, screens, showFeedbackPlusOne, buildDetectionBox, showLoader, hideLoader } from '../ui.js';
 import { startCamera, stopCamera, stopLiveDetect, startLiveDetect } from '../camera.js';
-import { loadModel, detectObjects, getModel } from '../detector.js';
+import { loadModel, detectObjects, getModel, parseBbox, getLabel, getScore } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
 import { MIN_SCORE, WIN_POINTS, TURN_SECONDS } from '../constants.js';
 import { resetTimer, startTimer, stopTimer, formatTime } from '../timer.js';
 import { updateGame } from '../firebase.js';
-
-function parseBbox(p) {
-  if (p.bbox && Array.isArray(p.bbox)) return p.bbox;
-  return [p.x, p.y, p.width, p.height];
-}
+import { navigate } from '../router.js';
 
 function computeWinner(aScore, bScore, winPoints) {
   if (aScore >= winPoints) return 'A';
@@ -108,7 +104,6 @@ export function renderPlay() {
     const newTurn = currentTurn === 'A' ? 'B' : 'A';
     const winner = computeWinner(playerAScore, playerBScore, winPoints);
 
-    // Write round result to Firebase — listener on both devices handles navigation
     await updateGame(store.gameId, {
       playerAScore,
       playerBScore,
@@ -118,6 +113,10 @@ export function renderPlay() {
       status: winner ? 'won' : 'playing',
       winner,
     });
+
+    // Navigate immediately — the finder always becomes the next challenger.
+    // The other player's subscription handles their side within POLL_MS.
+    navigate(winner ? 'win' : 'detect');
   }
 
   const drawLiveBoxes = (preds) => {
@@ -126,23 +125,11 @@ export function renderPlay() {
     const vwRect = vw.getBoundingClientRect();
     const scaleX = vwRect.width && video.videoWidth ? vwRect.width / video.videoWidth : 1;
     const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
-    (preds || []).filter(p => (p.confidence || p.score) > MIN_SCORE).forEach((p) => {
+    (preds || []).filter(p => getScore(p) > MIN_SCORE).forEach((p) => {
       const [x, y, w, h] = parseBbox(p);
-      const b = document.createElement('div');
-      b.className = 'box';
-      b.style.left = `${x * scaleX}px`;
-      b.style.top = `${y * scaleY}px`;
-      b.style.width = `${w * scaleX}px`;
-      b.style.height = `${h * scaleY}px`;
-      const lab = document.createElement('label');
-      const label = p.label || p.class || '';
-      const confidence = p.confidence || p.score || 0;
-      lab.textContent = `${label.toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
-      translateLabelToSv(label).then(sv => {
-        lab.textContent = `${(sv || '').toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
-      }).catch(() => {});
-      b.appendChild(lab);
-      overlay.appendChild(b);
+      const { box, lab } = buildDetectionBox(x, y, w, h, scaleX, scaleY, getLabel(p), getScore(p));
+      box.appendChild(lab);
+      overlay.appendChild(box);
     });
   };
 
@@ -153,41 +140,35 @@ export function renderPlay() {
     const scaleY = overlay.clientHeight && canvas.height ? overlay.clientHeight / canvas.height : 1;
     preds.forEach((p) => {
       const [x, y, w, h] = parseBbox(p);
-      const b = document.createElement('div');
-      b.className = 'box';
-      b.style.left = `${x * scaleX}px`;
-      b.style.top = `${y * scaleY}px`;
-      b.style.width = `${w * scaleX}px`;
-      b.style.height = `${h * scaleY}px`;
-      const lab = document.createElement('label');
-      const label = p.label || p.class || '';
-      const confidence = p.confidence || p.score || 0;
-      lab.textContent = `${label.toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
-      translateLabelToSv(label).then(sv => {
-        lab.textContent = `${(sv || '').toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
-      }).catch(() => {});
+      const { box, lab } = buildDetectionBox(x, y, w, h, scaleX, scaleY, getLabel(p), getScore(p));
       lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
-      b.appendChild(lab);
-      overlay.appendChild(b);
+      box.appendChild(lab);
+      overlay.appendChild(box);
     });
   };
 
-  startCamera(video).then(loadModel).then(() => {
-    resetTimer();
-    startTimer(() => {
-      finishRound(false);
-    });
-    startLiveDetect(async () => {
-      const model = getModel();
-      if (!model || video.readyState < 2) return;
-      const preds = await detectObjects(model, video);
-      drawLiveBoxes(preds || []);
-    });
-  }).catch(err => {
-    console.error('Kamerastart fel:', err);
-    alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
-    setScreen('home');
-  });
+  async function startCameraAndDetect() {
+    try {
+      await startCamera(video);
+      showLoader();
+      await loadModel();
+      hideLoader();
+      resetTimer();
+      startTimer(() => finishRound(false));
+      startLiveDetect(async () => {
+        const model = getModel();
+        if (!model || video.readyState < 2) return;
+        const preds = await detectObjects(model, video);
+        drawLiveBoxes(preds || []);
+      });
+    } catch (err) {
+      hideLoader();
+      console.error('Camera start error:', err);
+      alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
+      setScreen('home');
+    }
+  }
+  startCameraAndDetect();
 
   giveUp.onclick = () => finishRound(false);
 
@@ -201,10 +182,10 @@ export function renderPlay() {
       video.style.display = 'none';
       canvas.style.display = 'block';
       const allPreds = await detectObjects(model, canvas);
-      const preds = (allPreds || []).filter(p => (p.confidence || p.score) > MIN_SCORE);
+      const preds = (allPreds || []).filter(p => getScore(p) > MIN_SCORE);
       stopCamera();
       if (!preds.length) {
-        alert('Inga objekt över 60% hittades. Försök igen.');
+        alert(`Inga objekt över ${(MIN_SCORE * 100).toFixed(0)}% hittades. Försök igen.`);
         video.style.display = '';
         canvas.style.display = 'none';
         await startCamera(video);
@@ -218,8 +199,7 @@ export function renderPlay() {
       }
 
       drawInteractiveBoxes(preds, (p) => {
-        const label = p.label || p.class || '';
-        finishRound(label.toLowerCase() === (store.game.targetLabel || '').toLowerCase());
+        finishRound(getLabel(p).toLowerCase() === (store.game.targetLabel || '').toLowerCase());
       });
 
       const chooser = document.createElement('div');
@@ -230,17 +210,14 @@ export function renderPlay() {
       const grid = document.createElement('div');
       grid.className = 'grid';
       preds.slice(0, 6).forEach((p) => {
+        const label = getLabel(p);
+        const confidence = getScore(p);
         const btn = document.createElement('button');
-        const label = p.label || p.class || '';
-        const confidence = p.confidence || p.score || 0;
         btn.textContent = `${label.toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
         translateLabelToSv(label).then(sv => {
           btn.textContent = `${(sv || '').toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
         }).catch(() => {});
-        btn.onclick = () => {
-          const lbl = p.label || p.class || '';
-          finishRound(lbl.toLowerCase() === (store.game.targetLabel || '').toLowerCase());
-        };
+        btn.onclick = () => finishRound(label.toLowerCase() === (store.game.targetLabel || '').toLowerCase());
         grid.appendChild(btn);
       });
       chooser.appendChild(grid);

@@ -1,4 +1,5 @@
 import { store } from '../store.js';
+import { navigate } from '../router.js';
 import { updateScoreBar, setScreen, screens } from '../ui.js';
 import { stopCamera } from '../camera.js';
 import { translateLabelToSv } from '../translations.js';
@@ -43,7 +44,8 @@ export function renderWait() {
     startBtn.onclick = async () => {
       startBtn.disabled = true;
       await updateGame(gameId, { status: 'playing' });
-      // Firebase listener navigates both players to their screens
+      // Navigate immediately — the other player's subscription handles their side.
+      navigate('detect');
     };
     c.appendChild(startBtn);
     c.appendChild(makeCancelBtn(game, gameId, myRole));
@@ -100,7 +102,6 @@ function makeCancelBtn(game, gameId, myRole) {
     btn.disabled = true;
     const canceledBy = myRole === 'A' ? game.playerAName : game.playerBName;
     await updateGame(gameId, { status: 'canceled', canceledBy });
-    // Firebase listener navigates both players to cancel screen
   };
   return btn;
 }

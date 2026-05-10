@@ -1,6 +1,6 @@
 import { getStore } from "@netlify/blobs";
 
-function json(body, status = 200) {
+function json(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -8,6 +8,7 @@ function json(body, status = 200) {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
+      ...extra,
     },
   });
 }
@@ -35,7 +36,7 @@ export default async (req) => {
 
   if (req.method === "GET") {
     const data = await store.get(gameId, { type: "json" });
-    return json(data || null);
+    return json(data || null, 200, { "Cache-Control": "no-store" });
   }
 
   if (req.method === "POST") {
@@ -48,6 +49,14 @@ export default async (req) => {
     const updates = await req.json();
     const existing = await store.get(gameId, { type: "json" });
     if (!existing) return json({ error: "Game not found" }, 404);
+    // Prevent status from going backwards (e.g. a late accept PATCH must not
+    // overwrite a game that has already advanced to 'playing' or beyond).
+    if (updates.status !== undefined) {
+      const order = { inviting: 0, accepted: 1, playing: 2, won: 3, canceled: 3 };
+      if ((order[updates.status] ?? -1) < (order[existing.status] ?? -1)) {
+        delete updates.status;
+      }
+    }
     const merged = { ...existing, ...updates };
     await store.setJSON(gameId, merged);
     return json({ ok: true });

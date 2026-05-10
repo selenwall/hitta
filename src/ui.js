@@ -1,7 +1,5 @@
 import { store } from './store.js';
-
-export const $ = (sel) => document.querySelector(sel);
-export const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+import { translateLabelToSv } from './translations.js';
 
 export const screens = {
   home: document.querySelector('#screen-home'),
@@ -33,12 +31,44 @@ export function updateScoreBar() {
   `;
 }
 
+export function buildDetectionBox(x, y, w, h, scaleX, scaleY, label, confidence) {
+  const box = document.createElement('div');
+  box.className = 'box';
+  box.style.left = `${x * scaleX}px`;
+  box.style.top = `${y * scaleY}px`;
+  box.style.width = `${w * scaleX}px`;
+  box.style.height = `${h * scaleY}px`;
+  const lab = document.createElement('label');
+  lab.textContent = `${label.toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
+  translateLabelToSv(label).then(sv => {
+    lab.textContent = `${(sv || '').toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
+  }).catch(() => {});
+  return { box, lab };
+}
+
 export function showFeedbackPlusOne() {
   const node = document.createElement('div');
   node.className = 'feedback';
   node.innerHTML = '👍 <span class="plus">+1</span>';
   document.body.appendChild(node);
   setTimeout(() => node.remove(), 3000);
+}
+
+let loaderEl = null;
+
+export function showLoader(msg = 'Laddar AI-modell...') {
+  if (loaderEl) return;
+  loaderEl = document.createElement('div');
+  loaderEl.className = 'loader-overlay';
+  loaderEl.innerHTML = `<div class="loader-spinner"></div><div class="loader-msg">${msg}</div>`;
+  document.body.appendChild(loaderEl);
+}
+
+export function hideLoader() {
+  if (loaderEl) {
+    loaderEl.remove();
+    loaderEl = null;
+  }
 }
 
 export async function shareLink(text) {
