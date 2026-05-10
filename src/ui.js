@@ -54,6 +54,23 @@ export function showFeedbackPlusOne() {
   setTimeout(() => node.remove(), 3000);
 }
 
+let loaderEl = null;
+
+export function showLoader(msg = 'Laddar AI-modell...') {
+  if (loaderEl) return;
+  loaderEl = document.createElement('div');
+  loaderEl.className = 'loader-overlay';
+  loaderEl.innerHTML = `<div class="loader-spinner"></div><div class="loader-msg">${msg}</div>`;
+  document.body.appendChild(loaderEl);
+}
+
+export function hideLoader() {
+  if (loaderEl) {
+    loaderEl.remove();
+    loaderEl = null;
+  }
+}
+
 export async function shareLink(text) {
   const url = location.href;
   const full = `${text} ${url}`.trim();

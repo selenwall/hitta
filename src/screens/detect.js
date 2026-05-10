@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { updateScoreBar, setScreen, screens, buildDetectionBox } from '../ui.js';
+import { updateScoreBar, setScreen, screens, buildDetectionBox, showLoader, hideLoader } from '../ui.js';
 import { startCamera, stopCamera, stopLiveDetect, startLiveDetect } from '../camera.js';
 import { loadModel, detectObjects, getModel, parseBbox, getLabel, getScore } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
@@ -110,7 +110,9 @@ export function renderDetect() {
   async function startCameraAndDetect() {
     try {
       await startCamera(video);
+      showLoader();
       await loadModel();
+      hideLoader();
       startLiveDetect(async () => {
         const model = getModel();
         if (!model || video.readyState < 2) return;
@@ -118,6 +120,7 @@ export function renderDetect() {
         drawLiveBoxes(preds);
       });
     } catch (err) {
+      hideLoader();
       console.error('Camera start error:', err);
       alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
       setScreen('home');

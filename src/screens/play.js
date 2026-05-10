@@ -1,11 +1,12 @@
 import { store } from '../store.js';
-import { updateScoreBar, setScreen, screens, showFeedbackPlusOne, buildDetectionBox } from '../ui.js';
+import { updateScoreBar, setScreen, screens, showFeedbackPlusOne, buildDetectionBox, showLoader, hideLoader } from '../ui.js';
 import { startCamera, stopCamera, stopLiveDetect, startLiveDetect } from '../camera.js';
 import { loadModel, detectObjects, getModel, parseBbox, getLabel, getScore } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
 import { MIN_SCORE, WIN_POINTS, TURN_SECONDS } from '../constants.js';
 import { resetTimer, startTimer, stopTimer, formatTime } from '../timer.js';
 import { updateGame } from '../firebase.js';
+import { navigate } from '../router.js';
 
 function computeWinner(aScore, bScore, winPoints) {
   if (aScore >= winPoints) return 'A';
@@ -149,7 +150,9 @@ export function renderPlay() {
   async function startCameraAndDetect() {
     try {
       await startCamera(video);
+      showLoader();
       await loadModel();
+      hideLoader();
       resetTimer();
       startTimer(() => finishRound(false));
       startLiveDetect(async () => {
@@ -159,6 +162,7 @@ export function renderPlay() {
         drawLiveBoxes(preds || []);
       });
     } catch (err) {
+      hideLoader();
       console.error('Camera start error:', err);
       alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
       setScreen('home');
