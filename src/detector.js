@@ -73,3 +73,16 @@ export async function detectObjects(model, input) {
 export function getModel() {
   return yoloModel;
 }
+
+export function parseBbox(p) {
+  if (p.bbox && Array.isArray(p.bbox)) return p.bbox;
+  return [p.x, p.y, p.width, p.height];
+}
+
+export function getLabel(p) {
+  return p.label || p.class || '';
+}
+
+export function getScore(p) {
+  return p.confidence || p.score || 0;
+}

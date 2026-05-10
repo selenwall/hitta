@@ -1,9 +1,6 @@
-const API = '/api/game';
-const POLL_MS = 1500;
+import { POLL_MS } from './constants.js';
 
-export function initFirebase() {
-  // No-op — kept for router.js compatibility
-}
+const API = '/api/game';
 
 export async function createGame(gameId, data) {
   const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, {
@@ -23,6 +20,10 @@ export async function updateGame(gameId, updates) {
   if (!res.ok) throw new Error('Failed to update game');
 }
 
+// Returns null for missing/unknown games so callers can treat it as "no game".
+// Other API functions throw on failure; getGame uses null to signal the poll
+// loop to call back with null (which routes both players home) rather than
+// retrying on a known-missing game.
 export async function getGame(gameId) {
   const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`);
   if (!res.ok) return null;

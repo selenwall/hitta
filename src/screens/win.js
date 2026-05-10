@@ -24,7 +24,6 @@ export function renderWin() {
   again.className = 'primary';
   again.textContent = 'Spela igen';
   again.onclick = () => {
-    // Detach Firebase listener and clear game state to start fresh
     if (store.unsubscribe) { store.unsubscribe(); store.unsubscribe = null; }
     const pa = store.game.playerAName || 'Spelare A';
     const pb = store.game.playerBName || 'Spelare B';

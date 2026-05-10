@@ -1,5 +1,5 @@
 import { store } from './store.js';
-import { initFirebase, subscribeGame } from './firebase.js';
+import { subscribeGame } from './firebase.js';
 import { getGameIdFromURL } from './urlState.js';
 import { updateScoreBar } from './ui.js';
 import { renderHome } from './screens/home.js';
@@ -9,7 +9,6 @@ import { renderPlay } from './screens/play.js';
 import { renderWin } from './screens/win.js';
 import { renderCancel } from './screens/cancel.js';
 
-let firebaseInited = false;
 let currentScreen = null;
 
 export function navigate(screen) {
@@ -41,7 +40,7 @@ function routeFromGame(game) {
   const localRank = statusOrder[store.game.status] ?? -1;
   const effectiveStatus = serverRank >= localRank ? game.status : store.game.status;
 
-  // Merge Firebase data into store; keep isActive in sync for legacy helpers
+  // Merge server data into store; keep isActive in sync with status
   store.game = { ...store.game, ...game, status: effectiveStatus, isActive: effectiveStatus === 'playing' };
   updateScoreBar();
 
@@ -100,11 +99,6 @@ export function startSubscription(gameId) {
 }
 
 export function route() {
-  if (!firebaseInited) {
-    initFirebase();
-    firebaseInited = true;
-  }
-
   const gameId = getGameIdFromURL();
   if (gameId) {
     store.gameId = gameId;

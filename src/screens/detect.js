@@ -1,31 +1,11 @@
 import { store } from '../store.js';
-import { updateScoreBar, setScreen, screens } from '../ui.js';
+import { updateScoreBar, setScreen, screens, buildDetectionBox } from '../ui.js';
 import { startCamera, stopCamera, stopLiveDetect, startLiveDetect } from '../camera.js';
-import { loadModel, detectObjects, getModel } from '../detector.js';
+import { loadModel, detectObjects, getModel, parseBbox, getLabel, getScore } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
 import { MIN_SCORE } from '../constants.js';
 import { updateGame } from '../firebase.js';
 import { navigate } from '../router.js';
-
-function buildBox(x, y, w, h, scaleX, scaleY, label, confidence) {
-  const b = document.createElement('div');
-  b.className = 'box';
-  b.style.left = `${x * scaleX}px`;
-  b.style.top = `${y * scaleY}px`;
-  b.style.width = `${w * scaleX}px`;
-  b.style.height = `${h * scaleY}px`;
-  const lab = document.createElement('label');
-  lab.textContent = `${label.toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
-  translateLabelToSv(label).then(sv => {
-    lab.textContent = `${(sv || '').toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
-  }).catch(() => {});
-  return { box: b, lab };
-}
-
-function parseBbox(p) {
-  if (p.bbox && Array.isArray(p.bbox)) return p.bbox;
-  return [p.x, p.y, p.width, p.height];
-}
 
 export function renderDetect() {
   updateScoreBar();
@@ -85,9 +65,7 @@ export function renderDetect() {
     const scaleY = overlay.clientHeight && canvas.height ? overlay.clientHeight / canvas.height : 1;
     preds.forEach((p) => {
       const [x, y, w, h] = parseBbox(p);
-      const label = p.label || p.class || '';
-      const confidence = p.confidence || p.score || 0;
-      const { box, lab } = buildBox(x, y, w, h, scaleX, scaleY, label, confidence);
+      const { box, lab } = buildDetectionBox(x, y, w, h, scaleX, scaleY, getLabel(p), getScore(p));
       lab.onclick = (e) => { e.stopPropagation(); onPick(p); };
       box.appendChild(lab);
       overlay.appendChild(box);
@@ -100,11 +78,9 @@ export function renderDetect() {
     const vwRect = vw.getBoundingClientRect();
     const scaleX = vwRect.width && video.videoWidth ? vwRect.width / video.videoWidth : 1;
     const scaleY = vwRect.height && video.videoHeight ? vwRect.height / video.videoHeight : 1;
-    (preds || []).filter(p => (p.confidence || p.score) > MIN_SCORE).forEach((p) => {
+    (preds || []).filter(p => getScore(p) > MIN_SCORE).forEach((p) => {
       const [x, y, w, h] = parseBbox(p);
-      const label = p.label || p.class || '';
-      const confidence = p.confidence || p.score || 0;
-      const { box, lab } = buildBox(x, y, w, h, scaleX, scaleY, label, confidence);
+      const { box, lab } = buildDetectionBox(x, y, w, h, scaleX, scaleY, getLabel(p), getScore(p));
       lab.onclick = async (e) => {
         e.stopPropagation();
         try {
@@ -127,25 +103,27 @@ export function renderDetect() {
   };
 
   async function pickTarget(p) {
-    const targetLabel = p.label || p.class || '';
-    const targetConfidence = p.confidence || p.score || 0;
-    await updateGame(store.gameId, { targetLabel, targetConfidence });
-    // Navigate immediately — don't wait for the next subscription poll cycle
+    await updateGame(store.gameId, { targetLabel: getLabel(p), targetConfidence: getScore(p) });
     navigate('wait');
   }
 
-  startCamera(video).then(loadModel).then(() => {
-    startLiveDetect(async () => {
-      const model = getModel();
-      if (!model || video.readyState < 2) return;
-      const preds = await detectObjects(model, video);
-      drawLiveBoxes(preds);
-    });
-  }).catch(err => {
-    console.error('Kamerastart fel:', err);
-    alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
-    setScreen('home');
-  });
+  async function startCameraAndDetect() {
+    try {
+      await startCamera(video);
+      await loadModel();
+      startLiveDetect(async () => {
+        const model = getModel();
+        if (!model || video.readyState < 2) return;
+        const preds = await detectObjects(model, video);
+        drawLiveBoxes(preds);
+      });
+    } catch (err) {
+      console.error('Camera start error:', err);
+      alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
+      setScreen('home');
+    }
+  }
+  startCameraAndDetect();
 
   snap.onclick = async () => {
     try {
@@ -157,10 +135,10 @@ export function renderDetect() {
       video.style.display = 'none';
       canvas.style.display = 'block';
       const allPreds = await detectObjects(model, canvas);
-      const preds = (allPreds || []).filter(p => (p.confidence || p.score) > MIN_SCORE);
+      const preds = (allPreds || []).filter(p => getScore(p) > MIN_SCORE);
       stopCamera();
       if (!preds.length) {
-        alert('Inga objekt över 60% hittades. Försök igen.');
+        alert(`Inga objekt över ${(MIN_SCORE * 100).toFixed(0)}% hittades. Försök igen.`);
         video.style.display = '';
         canvas.style.display = 'none';
         await startCamera(video);
@@ -182,9 +160,9 @@ export function renderDetect() {
       const grid = document.createElement('div');
       grid.className = 'grid';
       preds.slice(0, 6).forEach((p) => {
+        const label = getLabel(p);
+        const confidence = getScore(p);
         const btn = document.createElement('button');
-        const label = p.label || p.class || '';
-        const confidence = p.confidence || p.score || 0;
         btn.textContent = `${label.toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
         translateLabelToSv(label).then(sv => {
           btn.textContent = `${(sv || '').toUpperCase()} ${(confidence * 100).toFixed(0)}%`;
