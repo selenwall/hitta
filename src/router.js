@@ -102,10 +102,15 @@ export function route() {
   const gameId = getGameIdFromURL();
   if (gameId) {
     store.gameId = gameId;
-    try {
-      store.myRole = sessionStorage.getItem(`hitta_role_${gameId}`) || null;
-    } catch {
-      store.myRole = null;
+    // Only read from sessionStorage if myRole isn't already live in memory.
+    // A spurious popstate (common on mobile) would otherwise overwrite a
+    // freshly-set in-memory role with a null sessionStorage read.
+    if (!store.myRole) {
+      try {
+        store.myRole = sessionStorage.getItem(`hitta_role_${gameId}`) || null;
+      } catch {
+        store.myRole = null;
+      }
     }
     startSubscription(gameId);
   } else {
