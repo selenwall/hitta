@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@color/background"
+    android:padding="32dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/cancel_icon"
+        android:textSize="64sp"
+        android:gravity="center"
+        android:paddingBottom="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/game_canceled_title"
+        android:textColor="@color/danger"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:paddingBottom="16dp" />
+
+    <TextView
+        android:id="@+id/tvCancelMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/foreground"
+        android:textSize="16sp"
+        android:gravity="center"
+        android:paddingBottom="40dp" />
+
+    <Button
+        android:id="@+id/btnBackHome"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/btn_back_home"
+        android:backgroundTint="@color/accent"
+        android:textColor="@color/background"
+        android:textStyle="bold"
+        android:padding="16dp" />
+
+</LinearLayout>
