@@ -18,7 +18,9 @@ export function renderDetect() {
 
   const instruction = document.createElement('div');
   instruction.className = 'pill';
-  instruction.textContent = 'Fotografera ett objekt att utmana motspelaren med';
+  instruction.textContent = store.testMode
+    ? 'Testläge: fotografera ett objekt som du sedan ska hitta igen'
+    : 'Fotografera ett objekt att utmana motspelaren med';
   container.appendChild(instruction);
 
   const vw = document.createElement('div');
@@ -111,10 +113,11 @@ export function renderDetect() {
       alert('Kunde inte skicka utmaningen. Kontrollera din anslutning och välj objektet igen.');
       return;
     }
-    // Optimistic local update so the wait screen shows the chosen challenge
+    // Optimistic local update so the next screen shows the chosen challenge
     // immediately instead of after the next poll.
     store.game = { ...store.game, ...updates };
-    navigate('wait');
+    // Test mode: you are also the finder — go straight to the play screen.
+    navigate(store.testMode ? 'play' : 'wait');
   }
 
   async function startCameraAndDetect() {

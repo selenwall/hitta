@@ -1,6 +1,6 @@
 import { store } from './store.js';
 import { subscribeGame } from './firebase.js';
-import { getGameIdFromURL } from './urlState.js';
+import { getGameIdFromURL, getModeFromURL } from './urlState.js';
 import { updateScoreBar } from './ui.js';
 import { renderHome } from './screens/home.js';
 import { renderDetect } from './screens/detect.js';
@@ -61,6 +61,12 @@ function routeFromGame(game) {
       targetScreen = 'wait';
       break;
     case 'playing': {
+      if (store.testMode) {
+        // Test mode: one device plays both roles — pick a target when none is
+        // set, then find it yourself.
+        targetScreen = game.targetLabel ? 'play' : 'detect';
+        break;
+      }
       const isChallenger = game.currentTurn === myRole;
       if (game.targetLabel) {
         // Target chosen — challenger waits, finder plays
@@ -99,6 +105,11 @@ export function startSubscription(gameId) {
 }
 
 export function route() {
+  store.testMode = getModeFromURL() === 'test';
+  if (store.testMode) {
+    const brand = document.querySelector('.brand');
+    if (brand) brand.textContent = 'Hitta! – TEST';
+  }
   const gameId = getGameIdFromURL();
   if (gameId) {
     store.gameId = gameId;
@@ -112,6 +123,9 @@ export function route() {
         store.myRole = null;
       }
     }
+    // A test game is always your own solo game — there is no second player
+    // to claim a role, so default to A instead of showing the invite screen.
+    if (store.testMode && !store.myRole) store.myRole = 'A';
     startSubscription(gameId);
   } else {
     store.gameId = '';

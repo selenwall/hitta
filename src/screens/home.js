@@ -12,12 +12,115 @@ export function renderHome() {
   setScreen('home');
   screens.home.innerHTML = '';
 
+  // Test mode: solo game against yourself, no invite flow
+  if (store.testMode) {
+    renderTestSetup();
+    return;
+  }
+
   // If there is a game ID but no role, this is Player B accepting an invite
   if (store.gameId && !store.myRole) {
     renderAcceptInvite();
   } else {
     renderCreateGame();
   }
+}
+
+function renderTestSetup() {
+  const wrap = document.createElement('div');
+  wrap.className = 'col card';
+
+  const title = document.createElement('h2');
+  title.textContent = 'Testläge';
+  wrap.appendChild(title);
+
+  const hint = document.createElement('div');
+  hint.className = 'hint';
+  hint.textContent = 'Du spelar mot dig själv: fotografera ett objekt och hitta det sedan igen. Ingen motspelare behövs.';
+  wrap.appendChild(hint);
+
+  const nameInput = document.createElement('input');
+  nameInput.placeholder = 'Ditt namn';
+  nameInput.value = store.game.playerAName || 'Testare';
+  nameInput.autocapitalize = 'words';
+  nameInput.autocomplete = 'name';
+  wrap.appendChild(nameInput);
+
+  const roundsRow = document.createElement('div');
+  roundsRow.className = 'row';
+  const roundsLabel = document.createElement('label');
+  roundsLabel.textContent = 'Poäng att vinna:';
+  const rounds = document.createElement('select');
+  [1, 3, 5].forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = String(n);
+    opt.textContent = String(n);
+    if (n === 1) opt.selected = true; // short games by default when testing
+    rounds.appendChild(opt);
+  });
+  roundsRow.appendChild(roundsLabel);
+  roundsRow.appendChild(rounds);
+  wrap.appendChild(roundsRow);
+
+  const startBtn = document.createElement('button');
+  startBtn.className = 'primary';
+  startBtn.textContent = 'Starta testspel';
+  startBtn.onclick = async () => {
+    startBtn.disabled = true;
+    startBtn.textContent = 'Skapar testspel...';
+
+    const name = nameInput.value.trim() || 'Testare';
+    const playerAName = name;
+    const playerBName = `${name} 2`;
+    const winPoints = parseInt(rounds.value, 10) || 1;
+    const gameId = Math.random().toString(36).slice(2, 10);
+
+    try {
+      // No invite phase: the game starts in 'playing' right away
+      await createGame(gameId, {
+        playerAName,
+        playerBName,
+        playerAScore: 0,
+        playerBScore: 0,
+        currentTurn: 'A',
+        targetLabel: '',
+        targetConfidence: 0,
+        status: 'playing',
+        winner: '',
+        winPoints,
+        canceledBy: '',
+        createdAt: Date.now(),
+      });
+    } catch (err) {
+      console.error('Kunde inte skapa testspelet:', err);
+      startBtn.disabled = false;
+      startBtn.textContent = 'Starta testspel';
+      alert('Kunde inte skapa testspelet. Försök igen.');
+      return;
+    }
+
+    try { sessionStorage.setItem(`hitta_role_${gameId}`, 'A'); } catch {}
+    store.myRole = 'A';
+    store.gameId = gameId;
+    store.game = {
+      ...store.game,
+      playerAName,
+      playerBName,
+      playerAScore: 0,
+      playerBScore: 0,
+      currentTurn: 'A',
+      targetLabel: '',
+      status: 'playing',
+      winner: '',
+      winPoints,
+    };
+
+    setGameIdInURL(gameId);
+    startSubscription(gameId);
+    navigate('detect');
+  };
+  wrap.appendChild(startBtn);
+  screens.home.appendChild(wrap);
 }
 
 function renderCreateGame() {

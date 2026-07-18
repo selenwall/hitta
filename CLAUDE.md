@@ -22,6 +22,8 @@ There is no build step, linter, or test suite configured. The app is served dire
 3. Player B has 120 seconds to find that object on their camera (play screen)
 4. Players swap roles each round; first to 5 points wins
 
+**Test mode**: open the app with `?mode=test` to play solo — the invite/accept flow is skipped, the game starts immediately, and the same device acts as both challenger (pick a target) and finder (find it again). Useful for testing the full game flow without a second player.
+
 ### Frontend Structure (`src/`)
 
 - **main.js** — Entry point, attaches routing listeners to navigation events
