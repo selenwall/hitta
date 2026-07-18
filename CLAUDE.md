@@ -29,7 +29,7 @@ There is no build step, linter, or test suite configured. The app is served dire
 - **store.js** — Thin global reactive store holding `gameState` and `userRole`
 - **constants.js** — `WIN_POINTS`, `TURN_SECONDS` (120), `MIN_SCORE` (0.6)
 - **camera.js** — Wraps `getUserMedia`, manages live detection loop
-- **detector.js** — Loads YOLO/COCO-SSD model from CDN, runs object detection, returns labeled bounding boxes
+- **detector.js** — Loads COCO-SSD (mobilenet_v2 base) via TensorFlow.js, runs object detection, returns labeled bounding boxes
 - **firebase.js** — Backend abstraction: GET/POST/PATCH game state via `/api/game` Netlify Function (despite the name, this is **not Firebase**)
 - **translations.js** — Translates English ML labels to Swedish (cached, with LibreTranslate fallback)
 - **timer.js** — Manages 120-second turn countdown
@@ -49,7 +49,7 @@ Real-time sync is achieved by polling every 1500ms from the client.
 
 ### Key Design Decisions
 
-- All ML inference runs **client-side** (TensorFlow.js + ML5.js loaded from CDN in `index.html`)
+- All ML inference runs **client-side** (TensorFlow.js + COCO-SSD loaded from CDN in `index.html`; model weights are downloaded once and cached, inference never leaves the device)
 - No build tooling; ES modules served directly from root
 - State lives in Netlify Blobs (keyed by `gameId`); no auth or user accounts
 - UI language is Swedish; object detection labels translated on the fly

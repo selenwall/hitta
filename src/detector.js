@@ -1,6 +1,10 @@
-import { MIN_SCORE } from './constants.js';
-
-let yoloModel = null;
+// Object detection runs fully in the browser via TensorFlow.js COCO-SSD.
+// The 'mobilenet_v2' base (SSDLite MobileNetV2) is noticeably more accurate
+// than the default 'lite_mobilenet_v2' while still running in real time on
+// mobile. The model is downloaded once and cached by the browser; inference
+// never leaves the device.
+let model = null;
+let modelPromise = null;
 
 function waitForScripts() {
   return new Promise((resolve, reject) => {
@@ -8,8 +12,7 @@ function waitForScripts() {
     const maxAttempts = 50;
     const check = () => {
       attempts++;
-      if (typeof ml5 !== 'undefined' || typeof cocoSsd !== 'undefined') {
-        console.log('Skript laddade efter', attempts * 100, 'ms');
+      if (typeof cocoSsd !== 'undefined') {
         resolve();
       } else if (attempts >= maxAttempts) {
         reject(new Error('Skript laddades inte inom 5 sekunder. Kontrollera din internetanslutning.'));
@@ -22,56 +25,30 @@ function waitForScripts() {
 }
 
 export async function loadModel() {
-  if (yoloModel) return yoloModel;
-
-  console.log('Försöker ladda objektigenkänningsmodell...');
-  await waitForScripts();
-
-  if (typeof ml5 !== 'undefined' && ml5.objectDetector) {
-    try {
-      console.log('Laddar YOLO-modell...');
-      yoloModel = await ml5.objectDetector('YOLO', {
-        filterBoxesThreshold: 0.01,
-        IOUThreshold: 0.4,
-        classProbThreshold: MIN_SCORE,
-      });
-      console.log('YOLO-modell laddad framgångsrikt');
-      return yoloModel;
-    } catch (error) {
-      console.warn('YOLO-modell misslyckades, försöker COCO-SSD:', error);
-    }
-  } else {
-    console.warn('ml5.js inte tillgängligt, försöker COCO-SSD');
+  if (!modelPromise) {
+    modelPromise = (async () => {
+      console.log('Laddar COCO-SSD (mobilenet_v2)...');
+      await waitForScripts();
+      const m = await cocoSsd.load({ base: 'mobilenet_v2' });
+      console.log('Objektigenkänningsmodell laddad');
+      model = m;
+      return m;
+    })().catch((err) => {
+      console.error('Modelladdning misslyckades:', err);
+      // Allow a retry on the next call instead of caching the failure forever.
+      modelPromise = null;
+      throw new Error('Kunde inte ladda objektigenkänningsmodellen. Kontrollera din internetanslutning och försök igen.');
+    });
   }
-
-  if (typeof cocoSsd !== 'undefined') {
-    try {
-      console.log('Laddar COCO-SSD-modell som fallback...');
-      yoloModel = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
-      console.log('COCO-SSD-modell laddad framgångsrikt');
-      return yoloModel;
-    } catch (error) {
-      console.error('COCO-SSD-modell misslyckades:', error);
-    }
-  }
-
-  throw new Error('Kunde inte ladda någon objektigenkänningsmodell. Kontrollera din internetanslutning och ladda om sidan.');
+  return modelPromise;
 }
 
 export async function detectObjects(model, input) {
-  if (model.detect && typeof model.detect === 'function' && model.detect.length === 2) {
-    return new Promise((resolve, reject) => {
-      model.detect(input, (err, results) => {
-        if (err) reject(err);
-        else resolve(results || []);
-      });
-    });
-  }
   return model.detect(input);
 }
 
 export function getModel() {
-  return yoloModel;
+  return model;
 }
 
 export function parseBbox(p) {

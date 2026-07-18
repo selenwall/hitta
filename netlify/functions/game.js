@@ -32,7 +32,9 @@ export default async (req) => {
 
   if (!gameId) return json({ error: "Missing game id" }, 400);
 
-  const store = getStore("games");
+  // Strong consistency: polling clients must never read a stale replica after
+  // a turn switch, or screens flip-flop between old and new game state.
+  const store = getStore({ name: "games", consistency: "strong" });
 
   if (req.method === "GET") {
     const data = await store.get(gameId, { type: "json" });
@@ -41,7 +43,7 @@ export default async (req) => {
 
   if (req.method === "POST") {
     const body = await req.json();
-    await store.setJSON(gameId, body);
+    await store.setJSON(gameId, { ...body, rev: 1 });
     return json({ ok: true });
   }
 
@@ -57,7 +59,8 @@ export default async (req) => {
         delete updates.status;
       }
     }
-    const merged = { ...existing, ...updates };
+    // Monotonic revision lets clients discard stale poll responses.
+    const merged = { ...existing, ...updates, rev: (existing.rev || 0) + 1 };
     await store.setJSON(gameId, merged);
     return json({ ok: true });
   }

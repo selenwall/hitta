@@ -103,7 +103,17 @@ export function renderDetect() {
   };
 
   async function pickTarget(p) {
-    await updateGame(store.gameId, { targetLabel: getLabel(p), targetConfidence: getScore(p) });
+    const updates = { targetLabel: getLabel(p), targetConfidence: getScore(p) };
+    try {
+      await updateGame(store.gameId, updates);
+    } catch (err) {
+      console.error('Kunde inte skicka utmaningen:', err);
+      alert('Kunde inte skicka utmaningen. Kontrollera din anslutning och välj objektet igen.');
+      return;
+    }
+    // Optimistic local update so the wait screen shows the chosen challenge
+    // immediately instead of after the next poll.
+    store.game = { ...store.game, ...updates };
     navigate('wait');
   }
 

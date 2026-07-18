@@ -33,15 +33,26 @@ export async function getGame(gameId) {
 export function subscribeGame(gameId, callback) {
   let active = true;
   let prev = '';
+  let lastRev = 0;
 
   async function poll() {
     while (active) {
       try {
         const data = await getGame(gameId);
-        const json = JSON.stringify(data);
-        if (json !== prev) {
-          prev = json;
-          callback(data);
+        // Discard stale reads: the server bumps `rev` on every write, so a
+        // response with a lower rev than one we've already seen is old state
+        // (e.g. a lagging replica right after a turn switch) — acting on it
+        // would route players back to the previous round's screens.
+        const rev = data ? (data.rev || 0) : 0;
+        if (data && rev < lastRev) {
+          // skip
+        } else {
+          const json = JSON.stringify(data);
+          if (json !== prev) {
+            prev = json;
+            lastRev = rev;
+            callback(data);
+          }
         }
       } catch {
         // ignore transient errors, keep polling

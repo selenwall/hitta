@@ -21,6 +21,7 @@ export function renderPlay() {
   screens.play.innerHTML = '';
 
   let roundAwarded = false;
+  let pendingUpdates = null; // set when a finished round failed to save, so a retry reuses the same result
 
   const container = document.createElement('div');
   container.className = 'col';
@@ -91,28 +92,56 @@ export function renderPlay() {
     stopCamera();
     stopLiveDetect();
 
-    let { playerAScore, playerBScore, currentTurn, winPoints } = store.game;
-    winPoints = winPoints || WIN_POINTS;
+    let updates = pendingUpdates;
+    if (!updates) {
+      let { playerAScore, playerBScore, currentTurn, winPoints } = store.game;
+      winPoints = winPoints || WIN_POINTS;
 
-    if (success) {
-      // Finder scores: when turn='A' (A challenges), B is the finder
-      if (currentTurn === 'A') playerBScore += 1;
-      else playerAScore += 1;
-      showFeedbackPlusOne();
+      if (success) {
+        // Finder scores: when turn='A' (A challenges), B is the finder
+        if (currentTurn === 'A') playerBScore += 1;
+        else playerAScore += 1;
+        showFeedbackPlusOne();
+      }
+
+      const newTurn = currentTurn === 'A' ? 'B' : 'A';
+      const winner = computeWinner(playerAScore, playerBScore, winPoints);
+
+      updates = {
+        playerAScore,
+        playerBScore,
+        currentTurn: newTurn,
+        targetLabel: '',
+        targetConfidence: 0,
+        status: winner ? 'won' : 'playing',
+        winner,
+      };
     }
 
-    const newTurn = currentTurn === 'A' ? 'B' : 'A';
-    const winner = computeWinner(playerAScore, playerBScore, winPoints);
+    // Persist the round result with retries — losing this write would leave
+    // the other player waiting forever on the previous round.
+    let saved = false;
+    for (let attempt = 0; attempt < 3 && !saved; attempt++) {
+      try {
+        await updateGame(store.gameId, updates);
+        saved = true;
+      } catch (err) {
+        console.error(`Kunde inte spara rundan (försök ${attempt + 1}):`, err);
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+    if (!saved) {
+      roundAwarded = false;
+      pendingUpdates = updates;
+      alert('Kunde inte spara rundan. Kontrollera din anslutning och tryck "Ge upp" för att försöka igen.');
+      return;
+    }
+    pendingUpdates = null;
 
-    await updateGame(store.gameId, {
-      playerAScore,
-      playerBScore,
-      currentTurn: newTurn,
-      targetLabel: '',
-      targetConfidence: 0,
-      status: winner ? 'won' : 'playing',
-      winner,
-    });
+    // Optimistic local update so the score bar and next screen are correct
+    // immediately instead of after the next poll.
+    const { winner } = updates;
+    store.game = { ...store.game, ...updates };
 
     // Navigate immediately — the finder always becomes the next challenger.
     // The other player's subscription handles their side within POLL_MS.
