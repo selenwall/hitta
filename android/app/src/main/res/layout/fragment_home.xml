@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textColor="@color/accent"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/app_subtitle"
+            android:textColor="@color/foreground"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:paddingBottom="32dp" />
+
+        <!-- CREATE GAME MODE -->
+        <LinearLayout
+            android:id="@+id/groupCreate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/create_game_title"
+                android:textColor="@color/foreground"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:paddingBottom="16dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_your_name"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_marginBottom="12dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etPlayerAName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPersonName"
+                    android:textColor="@color/foreground"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_opponent_name"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etPlayerBName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPersonName"
+                    android:textColor="@color/foreground"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/win_points_label"
+                android:textColor="@color/foreground"
+                android:textSize="14sp"
+                android:paddingBottom="8dp" />
+
+            <RadioGroup
+                android:id="@+id/rgWinPoints"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="24dp">
+
+                <RadioButton
+                    android:id="@+id/rb1point"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/one_point"
+                    android:textColor="@color/foreground"
+                    android:layout_weight="1" />
+
+                <RadioButton
+                    android:id="@+id/rb3points"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/three_points"
+                    android:textColor="@color/foreground"
+                    android:layout_weight="1" />
+
+                <RadioButton
+                    android:id="@+id/rb5points"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/five_points"
+                    android:textColor="@color/foreground"
+                    android:layout_weight="1"
+                    android:checked="true" />
+
+            </RadioGroup>
+
+            <Button
+                android:id="@+id/btnCreateGame"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/btn_create_game"
+                android:backgroundTint="@color/accent"
+                android:textColor="@color/background"
+                android:textStyle="bold"
+                android:padding="16dp" />
+
+            <Button
+                android:id="@+id/btnShareInvite"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/btn_share_invite"
+                android:backgroundTint="@color/surface"
+                android:textColor="@color/accent"
+                android:layout_marginTop="8dp"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+        <!-- INVITE / JOIN MODE -->
+        <LinearLayout
+            android:id="@+id/groupInvite"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/join_game_title"
+                android:textColor="@color/foreground"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:paddingBottom="16dp" />
+
+            <TextView
+                android:id="@+id/tvInvitePlayerAName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/foreground"
+                android:textSize="16sp"
+                android:paddingBottom="16dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_your_name"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etInvitePlayerBName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPersonName"
+                    android:textColor="@color/foreground"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <Button
+                android:id="@+id/btnJoinGame"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/btn_join_game"
+                android:backgroundTint="@color/accent"
+                android:textColor="@color/background"
+                android:textStyle="bold"
+                android:padding="16dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

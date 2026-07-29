@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">Hitta!</string>
+    <string name="app_subtitle">Det roliga föremålssökspelet</string>
+
+    <!-- Screen labels -->
+    <string name="screen_home">Hem</string>
+    <string name="screen_wait">Väntar</string>
+    <string name="screen_detect">Välj föremål</string>
+    <string name="screen_play">Hitta föremålet</string>
+    <string name="screen_win">Vinnare</string>
+    <string name="screen_cancel">Avbrutet</string>
+
+    <!-- Home fragment -->
+    <string name="create_game_title">Skapa nytt spel</string>
+    <string name="join_game_title">Gå med i spel</string>
+    <string name="hint_your_name">Ditt namn</string>
+    <string name="hint_opponent_name">Motståndarens namn (valfritt)</string>
+    <string name="win_points_label">Poäng för att vinna</string>
+    <string name="one_point">1</string>
+    <string name="three_points">3</string>
+    <string name="five_points">5</string>
+    <string name="btn_create_game">Skapa spel</string>
+    <string name="btn_join_game">Gå med</string>
+    <string name="btn_share_invite">Dela inbjudan</string>
+    <string name="invite_player_a">Inbjuden av: %1$s</string>
+    <string name="player_b">Motståndare</string>
+
+    <!-- Wait fragment -->
+    <string name="wait_inviting_a">Väntar på att %1$s ska gå med…</string>
+    <string name="wait_inviting_b">Väntar på att spelet ska starta…</string>
+    <string name="wait_accepted_a">Motståndaren är redo! Starta spelet.</string>
+    <string name="wait_accepted_b">Väntar på att %1$s ska starta spelet…</string>
+    <string name="wait_playing_challenger">Väntar på att %1$s ska hitta: %2$s</string>
+    <string name="wait_playing_finder">Väntar på att %1$s ska välja ett föremål…</string>
+    <string name="wait_generic">Väntar…</string>
+    <string name="btn_start_game">Starta spelet!</string>
+    <string name="btn_cancel">Avbryt spel</string>
+
+    <!-- Detect fragment -->
+    <string name="detect_instructions">Peka kameran mot ett föremål och tryck på det</string>
+
+    <!-- Play fragment -->
+    <string name="find_object">Hitta: %1$s</string>
+    <string name="timer_format">%1$d sek</string>
+    <string name="btn_give_up">Ge upp</string>
+
+    <!-- Score display -->
+    <string name="score_display">%1$s: %2$d  –  %3$s: %4$d</string>
+
+    <!-- Win fragment -->
+    <string name="win_trophy">🏆</string>
+    <string name="winner_announcement">%1$s vinner!</string>
+    <string name="final_scores">%1$s: %2$d  –  %3$s: %4$d</string>
+    <string name="btn_play_again">Spela igen</string>
+
+    <!-- Cancel fragment -->
+    <string name="cancel_icon">❌</string>
+    <string name="game_canceled_title">Spelet avbröts</string>
+    <string name="game_canceled">Spelet avbröts.</string>
+    <string name="canceled_by">%1$s avbröt spelet.</string>
+    <string name="btn_back_home">Tillbaka till start</string>
+
+    <!-- Share -->
+    <string name="share_invite_text">Spela Hitta! med mig: %1$s</string>
+    <string name="share_title">Dela inbjudan</string>
+
+    <!-- Errors -->
+    <string name="error_name_required">Namn krävs</string>
+</resources>
