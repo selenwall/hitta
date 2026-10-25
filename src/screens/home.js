@@ -1,7 +1,8 @@
 import { store } from '../store.js';
 import { navigate, startSubscription } from '../router.js';
 import { setGameIdInURL } from '../urlState.js';
-import { updateScoreBar, setScreen, screens } from '../ui.js';
+import { updateScoreBar, setScreen, screens, shareLink } from '../ui.js';
+import { saveSession } from '../session.js';
 import { checkCameraPermissions, startCamera } from '../camera.js';
 import { loadModel } from '../detector.js';
 import { WIN_POINTS } from '../constants.js';
@@ -76,9 +77,10 @@ function renderTestSetup() {
     const winPoints = parseInt(rounds.value, 10) || 1;
     const gameId = newGameId();
 
+    let token;
     try {
       // No invite phase: the game starts in 'playing' right away
-      await createGame(gameId, {
+      token = await createGame(gameId, {
         playerAName,
         playerBName,
         playerAScore: 0,
@@ -100,8 +102,9 @@ function renderTestSetup() {
       return;
     }
 
-    try { sessionStorage.setItem(`hitta_role_${gameId}`, 'A'); } catch {}
+    saveSession(gameId, 'A', token);
     store.myRole = 'A';
+    store.myToken = token;
     store.gameId = gameId;
     store.game = {
       ...store.game,
@@ -179,8 +182,9 @@ function renderCreateGame() {
     const winPoints = parseInt(rounds.value, 10) || WIN_POINTS;
     const gameId = newGameId();
 
+    let token;
     try {
-      await createGame(gameId, {
+      token = await createGame(gameId, {
         playerAName,
         playerBName,
         playerAScore: 0,
@@ -202,33 +206,16 @@ function renderCreateGame() {
       return;
     }
 
-    try { sessionStorage.setItem(`hitta_role_${gameId}`, 'A'); } catch {}
+    saveSession(gameId, 'A', token);
     store.myRole = 'A';
+    store.myToken = token;
     store.gameId = gameId;
 
     setGameIdInURL(gameId);
 
     startSubscription(gameId);
 
-    // Share the invite link
-    const url = location.href;
-    const text = `${playerAName} utmanar dig till Hitta! – Objektduellen. Öppna länken för att acceptera:`;
-    if (navigator.share) {
-      navigator.share({ title: 'Hitta! – Inbjudan', text, url }).catch(() => {});
-    } else {
-      const smsUrl = `sms:?&body=${encodeURIComponent(`${text} ${url}`)}`;
-      const opened = window.open(smsUrl, '_blank');
-      if (!opened) {
-        const wa = `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`;
-        const openedWa = window.open(wa, '_blank');
-        if (!openedWa && navigator.clipboard?.writeText) {
-          try {
-            await navigator.clipboard.writeText(`${text} ${url}`);
-            alert('Inbjudningslänk kopierad! Klistra in i valfri app.');
-          } catch {}
-        }
-      }
-    }
+    await shareLink(`${playerAName} utmanar dig till Hitta! – Objektduellen. Öppna länken för att acceptera:`);
   };
   wrap.appendChild(sendBtn);
 
@@ -292,6 +279,12 @@ async function renderAcceptInvite() {
     screens.home.innerHTML = '<div class="center card"><div>Det här spelet är redan avslutat.</div></div>';
     return;
   }
+  // Only an open invite can be accepted; once B has joined, the server
+  // rejects other devices.
+  if (game.status !== 'inviting') {
+    screens.home.innerHTML = '<div class="center card"><div>Inbjudan har redan accepterats och spelet pågår.</div></div>';
+    return;
+  }
 
   screens.home.innerHTML = '';
   const wrap = document.createElement('div');
@@ -321,22 +314,33 @@ async function renderAcceptInvite() {
     acceptBtn.disabled = true;
     acceptBtn.textContent = 'Accepterar...';
     const playerBName = nameInput.value.trim() || 'Spelare B';
-    try { sessionStorage.setItem(`hitta_role_${store.gameId}`, 'B'); } catch {}
-    store.myRole = 'B';
-    // Optimistic: navigate immediately so UI doesn't hang
-    store.game = { ...store.game, playerBName, status: 'accepted' };
-    navigate('wait');
-    // Update server in background with retry
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Not optimistic: the server issues B's token on accept, and without it
+    // this device couldn't play — so wait for it and report failure.
+    let token = null;
+    let lastErr = null;
+    for (let attempt = 0; attempt < 3 && !token; attempt++) {
       try {
-        await updateGame(store.gameId, { playerBName, status: 'accepted' });
-        return; // success
+        ({ token } = await updateGame(store.gameId, { playerBName, status: 'accepted' }));
       } catch (err) {
+        lastErr = err;
         console.error(`Accepteringsförsök ${attempt + 1} misslyckades:`, err);
+        if (err.status === 403) break; // someone else already accepted
         if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
       }
     }
-    console.error('Alla accepteringsförsök misslyckades');
+    if (!token) {
+      acceptBtn.disabled = false;
+      acceptBtn.textContent = 'Acceptera inbjudan';
+      alert(lastErr?.status === 403
+        ? 'Inbjudan har redan accepterats.'
+        : 'Kunde inte acceptera inbjudan. Kontrollera din anslutning och försök igen.');
+      return;
+    }
+    saveSession(store.gameId, 'B', token);
+    store.myRole = 'B';
+    store.myToken = token;
+    store.game = { ...store.game, playerBName, status: 'accepted' };
+    navigate('wait');
   };
   wrap.appendChild(acceptBtn);
   screens.home.appendChild(wrap);

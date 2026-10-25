@@ -1,32 +1,19 @@
+import { randomUUID } from "node:crypto";
 import { getStore } from "@netlify/blobs";
 
+// The API is only called same-origin, so no CORS headers: other sites must
+// not be able to read or write games from a visitor's browser.
 function json(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-      ...extra,
-    },
-  });
-}
-
-function cors() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
+    headers: { "Content-Type": "application/json", ...extra },
   });
 }
 
 const GAME_ID_RE = /^[a-z0-9]{6,32}$/;
 const MAX_BODY_BYTES = 4096;
 const STATUS_ORDER = { inviting: 0, accepted: 1, playing: 2, won: 3, canceled: 3 };
+const MAX_WRITE_ATTEMPTS = 5;
 
 const isStr = (max) => (v) => typeof v === "string" && v.length <= max;
 const isInt = (min, max) => (v) => Number.isInteger(v) && v >= min && v <= max;
@@ -71,9 +58,14 @@ async function readBody(req) {
   }
 }
 
-export default async (req) => {
-  if (req.method === "OPTIONS") return cors();
+// Player tokens are secrets; never send them to clients in game state.
+function publicView(game) {
+  if (!game) return null;
+  const { tokenA, tokenB, ...rest } = game;
+  return rest;
+}
 
+export default async (req) => {
   const url = new URL(req.url);
   const gameId = url.searchParams.get("id");
 
@@ -85,40 +77,66 @@ export default async (req) => {
 
   if (req.method === "GET") {
     const data = await store.get(gameId, { type: "json" });
-    return json(data || null, 200, { "Cache-Control": "no-store" });
+    return json(publicView(data), 200, { "Cache-Control": "no-store" });
   }
 
   if (req.method === "POST") {
     const body = await readBody(req);
     if (!body) return json({ error: "Invalid game data" }, 400);
-    // Never let a create overwrite an existing game.
-    const existing = await store.get(gameId, { type: "json" });
-    if (existing) return json({ error: "Game already exists" }, 409);
-    await store.setJSON(gameId, { ...body, rev: 1 });
-    return json({ ok: true });
+    // The creator is player A; the token proves it on later writes.
+    const token = randomUUID();
+    // onlyIfNew: a create must never overwrite an existing game.
+    const { modified } = await store.setJSON(gameId, { ...body, tokenA: token, rev: 1 }, { onlyIfNew: true });
+    if (!modified) return json({ error: "Game already exists" }, 409);
+    return json({ ok: true, token });
   }
 
   if (req.method === "PATCH") {
-    const updates = await readBody(req);
-    if (!updates) return json({ error: "Invalid update" }, 400);
-    const existing = await store.get(gameId, { type: "json" });
-    if (!existing) return json({ error: "Game not found" }, 404);
-    // A finished game is final: late writes (e.g. a round result racing a
-    // cancel) must not change it.
-    if (existing.status === "won" || existing.status === "canceled") {
-      return json({ ok: true });
-    }
-    // Prevent status from going backwards (e.g. a late accept PATCH must not
-    // overwrite a game that has already advanced to 'playing' or beyond).
-    if (updates.status !== undefined) {
-      if ((STATUS_ORDER[updates.status] ?? -1) < (STATUS_ORDER[existing.status] ?? -1)) {
-        delete updates.status;
+    const body = await readBody(req);
+    if (!body) return json({ error: "Invalid update" }, 400);
+    const token = req.headers.get("x-player-token") || "";
+
+    // Read-modify-write with an ETag check, retried on conflict, so two
+    // players writing at the same moment can't silently drop each other's
+    // update (e.g. a cancel racing a round result).
+    for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt++) {
+      const entry = await store.getWithMetadata(gameId, { type: "json" });
+      if (!entry) return json({ error: "Game not found" }, 404);
+      const existing = entry.data;
+      const updates = { ...body };
+      let issuedToken;
+
+      if (!token || (token !== existing.tokenA && token !== existing.tokenB)) {
+        // Without a valid token the only allowed write is player B claiming
+        // an open invite, which issues B's token. Anyone else holding the
+        // link can watch but not change the game.
+        const isJoin = existing.status === "inviting" && !existing.tokenB && updates.status === "accepted";
+        if (!isJoin) return json({ error: "Not a player in this game" }, 403);
+        issuedToken = randomUUID();
+        for (const key of Object.keys(updates)) {
+          if (key !== "playerBName" && key !== "status") delete updates[key];
+        }
+        updates.tokenB = issuedToken;
       }
+
+      // A finished game is final: late writes (e.g. a round result racing a
+      // cancel) must not change it.
+      if (existing.status === "won" || existing.status === "canceled") {
+        return json({ ok: true });
+      }
+      // Prevent status from going backwards (e.g. a late accept PATCH must not
+      // overwrite a game that has already advanced to 'playing' or beyond).
+      if (updates.status !== undefined) {
+        if ((STATUS_ORDER[updates.status] ?? -1) < (STATUS_ORDER[existing.status] ?? -1)) {
+          delete updates.status;
+        }
+      }
+      // Monotonic revision lets clients discard stale poll responses.
+      const merged = { ...existing, ...updates, rev: (existing.rev || 0) + 1 };
+      const { modified } = await store.setJSON(gameId, merged, { onlyIfMatch: entry.etag });
+      if (modified) return json(issuedToken ? { ok: true, token: issuedToken } : { ok: true });
     }
-    // Monotonic revision lets clients discard stale poll responses.
-    const merged = { ...existing, ...updates, rev: (existing.rev || 0) + 1 };
-    await store.setJSON(gameId, merged);
-    return json({ ok: true });
+    return json({ error: "Game is busy, try again" }, 409);
   }
 
   return json({ error: "Method not allowed" }, 405);

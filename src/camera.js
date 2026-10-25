@@ -4,6 +4,9 @@ let mediaStream = null;
 let activeRAF = 0;
 let liveDetectInterval = null;
 let liveDetectInProgress = false;
+// Bumped on every stop so an in-flight detection can tell its results are
+// stale (e.g. the player just snapped a photo) and not draw them.
+let liveDetectGeneration = 0;
 // Bumped on every stop so a startCamera() still awaiting permission can tell
 // it was superseded (e.g. the player left the screen) and release the camera.
 let cameraGeneration = 0;
@@ -16,6 +19,7 @@ function cancelRAF() {
 }
 
 export function stopLiveDetect() {
+  liveDetectGeneration++;
   if (liveDetectInterval) {
     clearInterval(liveDetectInterval);
     liveDetectInterval = null;
@@ -104,13 +108,17 @@ export async function startCamera(videoEl, facingMode = 'environment') {
   }
 }
 
+// fn receives isLive(): false once live detection has been stopped since this
+// call, so fn can drop results that arrive after the screen moved on.
 export function startLiveDetect(fn) {
   stopLiveDetect();
+  const generation = liveDetectGeneration;
+  const isLive = () => generation === liveDetectGeneration;
   liveDetectInterval = setInterval(async () => {
     if (liveDetectInProgress) return;
     liveDetectInProgress = true;
     try {
-      await fn();
+      await fn(isLive);
     } catch {
       // ignore transient errors
     } finally {

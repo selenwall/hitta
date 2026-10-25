@@ -1,4 +1,5 @@
 import { POLL_MS } from './constants.js';
+import { store } from './store.js';
 
 const API = '/api/game';
 
@@ -8,22 +9,36 @@ export function newGameId() {
   return Array.from(bytes, b => (b % 36).toString(36)).join('');
 }
 
+function apiError(message, res) {
+  const err = new Error(`${message} (${res.status})`);
+  err.status = res.status;
+  return err;
+}
+
+// Resolves to the creator's (player A's) secret token.
 export async function createGame(gameId, data) {
   const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Failed to create game');
+  if (!res.ok) throw apiError('Failed to create game', res);
+  return (await res.json()).token;
 }
 
+// Writes as the player whose token is in the store. Without a token the only
+// write the server accepts is claiming an open invite, which resolves to
+// { token } for player B.
 export async function updateGame(gameId, updates) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (store.myToken) headers['X-Player-Token'] = store.myToken;
   const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(updates),
   });
-  if (!res.ok) throw new Error('Failed to update game');
+  if (!res.ok) throw apiError('Failed to update game', res);
+  return res.json();
 }
 
 // Returns null for missing/unknown games so callers can treat it as "no game"

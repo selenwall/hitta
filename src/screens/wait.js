@@ -1,6 +1,6 @@
 import { store } from '../store.js';
 import { navigate } from '../router.js';
-import { updateScoreBar, setScreen, screens } from '../ui.js';
+import { updateScoreBar, setScreen, screens, makeCancelButton } from '../ui.js';
 import { stopCamera } from '../camera.js';
 import { translateLabelToSv } from '../translations.js';
 import { updateGame } from '../firebase.js';
@@ -12,6 +12,11 @@ export function renderWait() {
   screens.wait.innerHTML = '';
 
   const { game, gameId, myRole } = store;
+  const cancelBtn = () => {
+    const btn = makeCancelButton();
+    btn.style.marginTop = '1rem';
+    return btn;
+  };
   const c = document.createElement('div');
   c.className = 'center card';
 
@@ -30,7 +35,7 @@ export function renderWait() {
     tip.textContent = 'Håll den här skärmen öppen. Du får ett meddelande när motspelaren accepterar.';
     c.appendChild(tip);
 
-    c.appendChild(makeCancelBtn(game, gameId, myRole));
+    c.appendChild(cancelBtn());
 
   } else if (game.status === 'accepted' && myRole === 'A') {
     // Player B accepted — Player A can now start the game
@@ -55,7 +60,7 @@ export function renderWait() {
       navigate('detect');
     };
     c.appendChild(startBtn);
-    c.appendChild(makeCancelBtn(game, gameId, myRole));
+    c.appendChild(cancelBtn());
 
   } else if (game.status === 'accepted' && myRole === 'B') {
     // Player B waiting for Player A to start
@@ -83,7 +88,7 @@ export function renderWait() {
     }).catch(() => {});
     c.appendChild(info);
 
-    c.appendChild(makeCancelBtn(game, gameId, myRole));
+    c.appendChild(cancelBtn());
 
   } else if (game.status === 'playing' && !game.targetLabel) {
     // Finder is waiting for challenger to pick an object
@@ -98,23 +103,4 @@ export function renderWait() {
   }
 
   screens.wait.appendChild(c);
-}
-
-function makeCancelBtn(game, gameId, myRole) {
-  const btn = document.createElement('button');
-  btn.className = 'danger';
-  btn.textContent = 'Avbryt spel';
-  btn.style.marginTop = '1rem';
-  btn.onclick = async () => {
-    btn.disabled = true;
-    const canceledBy = myRole === 'A' ? game.playerAName : game.playerBName;
-    try {
-      await updateGame(gameId, { status: 'canceled', canceledBy });
-    } catch (err) {
-      console.error('Kunde inte avbryta spelet:', err);
-      btn.disabled = false;
-      alert('Kunde inte avbryta spelet. Kontrollera din anslutning och försök igen.');
-    }
-  };
-  return btn;
 }
