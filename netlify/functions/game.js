@@ -106,11 +106,17 @@ export default async (req) => {
       const updates = { ...body };
       let issuedToken;
 
-      if (!token || (token !== existing.tokenA && token !== existing.tokenB)) {
+      // Games created before player tokens existed have no tokenA; keep them
+      // writable without a token (as they were) so they can still be played
+      // or canceled — including from tabs still running the old client.
+      const legacy = !existing.tokenA;
+      const isPlayer = legacy || (token && (token === existing.tokenA || token === existing.tokenB));
+      const isJoin = existing.status === "inviting" && !existing.tokenB && body.status === "accepted";
+
+      if (!isPlayer || (legacy && isJoin && !token)) {
         // Without a valid token the only allowed write is player B claiming
         // an open invite, which issues B's token. Anyone else holding the
         // link can watch but not change the game.
-        const isJoin = existing.status === "inviting" && !existing.tokenB && updates.status === "accepted";
         if (!isJoin) return json({ error: "Not a player in this game" }, 403);
         issuedToken = randomUUID();
         for (const key of Object.keys(updates)) {

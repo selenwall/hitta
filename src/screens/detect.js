@@ -1,5 +1,6 @@
 import { store } from '../store.js';
-import { updateScoreBar, setScreen, screens, buildDetectionBox, showLoader, hideLoader, showCameraError, makeCancelButton } from '../ui.js';
+import { updateScoreBar, setScreen, screens, buildDetectionBox, showLoader, hideLoader, showCameraError } from '../ui.js';
+import { makeCancelButton } from './cancel.js';
 import { startCamera, stopCamera, stopLiveDetect, startLiveDetect, CameraAbortedError } from '../camera.js';
 import { loadModel, detectObjects, getModel, parseBbox, getLabel, getScore } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';

@@ -1,6 +1,7 @@
 import { store } from '../store.js';
 import { navigate } from '../router.js';
-import { updateScoreBar, setScreen, screens, makeCancelButton } from '../ui.js';
+import { updateScoreBar, setScreen, screens } from '../ui.js';
+import { makeCancelButton } from './cancel.js';
 import { stopCamera } from '../camera.js';
 import { translateLabelToSv } from '../translations.js';
 import { updateGame } from '../firebase.js';
