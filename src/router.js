@@ -11,6 +11,7 @@ import { renderWait } from './screens/wait.js';
 import { renderPlay } from './screens/play.js';
 import { renderWin } from './screens/win.js';
 import { renderCancel } from './screens/cancel.js';
+import { renderPlayground } from './screens/playground.js';
 
 let currentScreen = null;
 
@@ -29,6 +30,7 @@ export function navigate(screen) {
     case 'play':   renderPlay();   break;
     case 'win':    renderWin();    break;
     case 'cancel': renderCancel(); break;
+    case 'playground': renderPlayground(); break;
   }
 }
 

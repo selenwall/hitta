@@ -37,27 +37,6 @@ export function stopCamera() {
   }
 }
 
-export async function checkCameraPermissions() {
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      return { supported: false, error: 'getUserMedia stöds inte i denna webbläsare' };
-    }
-    if (navigator.permissions) {
-      try {
-        const permission = await navigator.permissions.query({ name: 'camera' });
-        if (permission.state === 'denied') {
-          return { supported: true, error: 'Kamerabehörighet nekades. Klicka på kameran-ikonen i adressfältet och tillåt kameran.' };
-        }
-      } catch {
-        // ignore
-      }
-    }
-    return { supported: true, error: null };
-  } catch (error) {
-    return { supported: false, error: error.message };
-  }
-}
-
 // Thrown when the camera was stopped while starting; callers should bail out
 // silently since the screen that wanted it is gone.
 export class CameraAbortedError extends Error {
