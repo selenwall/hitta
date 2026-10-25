@@ -1,7 +1,9 @@
 import { store } from './store.js';
 import { subscribeGame } from './firebase.js';
 import { getGameIdFromURL, getModeFromURL } from './urlState.js';
-import { updateScoreBar } from './ui.js';
+import { updateScoreBar, hideLoader } from './ui.js';
+import { stopCamera } from './camera.js';
+import { stopTimer } from './timer.js';
 import { renderHome } from './screens/home.js';
 import { renderDetect } from './screens/detect.js';
 import { renderWait } from './screens/wait.js';
@@ -13,6 +15,12 @@ let currentScreen = null;
 
 export function navigate(screen) {
   currentScreen = screen;
+  // Leaving a screen must release everything it started: otherwise e.g. the
+  // opponent canceling mid-round leaves the camera on and the turn timer
+  // running, and its expiry would submit a round from the cancel screen.
+  stopTimer();
+  stopCamera();
+  hideLoader();
   switch (screen) {
     case 'home':   renderHome();   break;
     case 'detect': renderDetect(); break;

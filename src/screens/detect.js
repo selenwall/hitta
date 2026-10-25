@@ -1,17 +1,24 @@
 import { store } from '../store.js';
-import { updateScoreBar, setScreen, screens, buildDetectionBox, showLoader, hideLoader } from '../ui.js';
-import { startCamera, stopCamera, stopLiveDetect, startLiveDetect } from '../camera.js';
+import { updateScoreBar, setScreen, screens, buildDetectionBox, showLoader, hideLoader, showCameraError } from '../ui.js';
+import { startCamera, stopCamera, stopLiveDetect, startLiveDetect, CameraAbortedError } from '../camera.js';
 import { loadModel, detectObjects, getModel, parseBbox, getLabel, getScore } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
 import { MIN_SCORE } from '../constants.js';
 import { updateGame } from '../firebase.js';
-import { navigate } from '../router.js';
+import { navigate, getCurrentScreen } from '../router.js';
+
+let detectRenderId = 0;
 
 export function renderDetect() {
   updateScoreBar();
   setScreen('detect');
   stopCamera();
   screens.detect.innerHTML = '';
+
+  // Async work (camera start, model load) can finish after the player has been
+  // routed elsewhere; it must not act on a screen that's gone.
+  const renderId = ++detectRenderId;
+  const isCurrent = () => renderId === detectRenderId && getCurrentScreen() === 'detect';
 
   const container = document.createElement('div');
   container.className = 'col';
@@ -50,7 +57,13 @@ export function renderDetect() {
   cancelBtn.onclick = async () => {
     cancelBtn.disabled = true;
     const canceledBy = store.myRole === 'A' ? store.game.playerAName : store.game.playerBName;
-    await updateGame(store.gameId, { status: 'canceled', canceledBy });
+    try {
+      await updateGame(store.gameId, { status: 'canceled', canceledBy });
+    } catch (err) {
+      console.error('Kunde inte avbryta spelet:', err);
+      cancelBtn.disabled = false;
+      alert('Kunde inte avbryta spelet. Kontrollera din anslutning och försök igen.');
+    }
   };
   actions.appendChild(cancelBtn);
 
@@ -113,6 +126,7 @@ export function renderDetect() {
       alert('Kunde inte skicka utmaningen. Kontrollera din anslutning och välj objektet igen.');
       return;
     }
+    if (!isCurrent()) return;
     // Optimistic local update so the next screen shows the chosen challenge
     // immediately instead of after the next poll.
     store.game = { ...store.game, ...updates };
@@ -123,9 +137,11 @@ export function renderDetect() {
   async function startCameraAndDetect() {
     try {
       await startCamera(video);
+      if (!isCurrent()) return;
       showLoader();
       await loadModel();
       hideLoader();
+      if (!isCurrent()) return;
       startLiveDetect(async () => {
         const model = getModel();
         if (!model || video.readyState < 2) return;
@@ -134,9 +150,9 @@ export function renderDetect() {
       });
     } catch (err) {
       hideLoader();
+      if (err instanceof CameraAbortedError || !isCurrent()) return;
       console.error('Camera start error:', err);
-      alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
-      setScreen('home');
+      showCameraError(vw, err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.', () => navigate('detect'));
     }
   }
   startCameraAndDetect();
@@ -152,12 +168,14 @@ export function renderDetect() {
       canvas.style.display = 'block';
       const allPreds = await detectObjects(model, canvas);
       const preds = (allPreds || []).filter(p => getScore(p) > MIN_SCORE);
+      if (!isCurrent()) return;
       stopCamera();
       if (!preds.length) {
         alert(`Inga objekt över ${(MIN_SCORE * 100).toFixed(0)}% hittades. Försök igen.`);
         video.style.display = '';
         canvas.style.display = 'none';
         await startCamera(video);
+        if (!isCurrent()) return;
         startLiveDetect(async () => {
           const model = getModel();
           if (!model || video.readyState < 2) return;
@@ -189,6 +207,7 @@ export function renderDetect() {
       chooser.appendChild(grid);
       screens.detect.appendChild(chooser);
     } catch (e) {
+      if (e instanceof CameraAbortedError || !isCurrent()) return;
       console.error(e);
       alert('Det gick inte att analysera bilden.');
     }

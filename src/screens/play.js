@@ -1,12 +1,14 @@
 import { store } from '../store.js';
-import { updateScoreBar, setScreen, screens, showFeedbackPlusOne, buildDetectionBox, showLoader, hideLoader } from '../ui.js';
-import { startCamera, stopCamera, stopLiveDetect, startLiveDetect } from '../camera.js';
+import { updateScoreBar, setScreen, screens, showFeedbackPlusOne, buildDetectionBox, showLoader, hideLoader, showCameraError } from '../ui.js';
+import { startCamera, stopCamera, stopLiveDetect, startLiveDetect, CameraAbortedError } from '../camera.js';
 import { loadModel, detectObjects, getModel, parseBbox, getLabel, getScore } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
 import { MIN_SCORE, WIN_POINTS, TURN_SECONDS } from '../constants.js';
 import { resetTimer, startTimer, stopTimer, formatTime } from '../timer.js';
 import { updateGame } from '../firebase.js';
-import { navigate } from '../router.js';
+import { navigate, getCurrentScreen } from '../router.js';
+
+let playRenderId = 0;
 
 function computeWinner(aScore, bScore, winPoints) {
   if (aScore >= winPoints) return 'A';
@@ -20,6 +22,11 @@ export function renderPlay() {
   stopCamera();
   screens.play.innerHTML = '';
 
+  // Async work (camera start, model load, saving a round) can finish after the
+  // player has been routed elsewhere; it must not act on a screen that's gone.
+  const renderId = ++playRenderId;
+  const isCurrent = () => renderId === playRenderId && getCurrentScreen() === 'play';
+
   let roundAwarded = false;
   let pendingUpdates = null; // set when a finished round failed to save, so a retry reuses the same result
 
@@ -28,10 +35,12 @@ export function renderPlay() {
 
   const pill = document.createElement('div');
   pill.className = 'challenge-pill';
-  pill.innerHTML = `Hitta: <span class="name">${(store.game.targetLabel || '').toUpperCase()}</span>`;
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'name';
+  nameSpan.textContent = (store.game.targetLabel || '').toUpperCase();
+  pill.append('Hitta: ', nameSpan);
   translateLabelToSv(store.game.targetLabel).then(sv => {
-    const span = pill.querySelector('.name');
-    if (span && sv) span.textContent = (sv || '').toUpperCase();
+    if (sv) nameSpan.textContent = sv.toUpperCase();
   }).catch(() => {});
   container.appendChild(pill);
 
@@ -72,7 +81,13 @@ export function renderPlay() {
     stopCamera();
     stopLiveDetect();
     const canceledBy = store.myRole === 'A' ? store.game.playerAName : store.game.playerBName;
-    await updateGame(store.gameId, { status: 'canceled', canceledBy });
+    try {
+      await updateGame(store.gameId, { status: 'canceled', canceledBy });
+    } catch (err) {
+      console.error('Kunde inte avbryta spelet:', err);
+      cancelBtn.disabled = false;
+      alert('Kunde inte avbryta spelet. Kontrollera din anslutning och försök igen.');
+    }
   };
   actions.appendChild(cancelBtn);
 
@@ -85,7 +100,7 @@ export function renderPlay() {
   const ctx = canvas.getContext('2d');
 
   async function finishRound(success) {
-    if (roundAwarded) return;
+    if (roundAwarded || !isCurrent()) return;
     roundAwarded = true;
 
     stopTimer();
@@ -130,6 +145,7 @@ export function renderPlay() {
         if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
       }
     }
+    if (!isCurrent()) return;
     if (!saved) {
       roundAwarded = false;
       pendingUpdates = updates;
@@ -179,9 +195,11 @@ export function renderPlay() {
   async function startCameraAndDetect() {
     try {
       await startCamera(video);
+      if (!isCurrent()) return;
       showLoader();
       await loadModel();
       hideLoader();
+      if (!isCurrent()) return;
       resetTimer();
       startTimer(() => finishRound(false));
       startLiveDetect(async () => {
@@ -192,9 +210,9 @@ export function renderPlay() {
       });
     } catch (err) {
       hideLoader();
+      if (err instanceof CameraAbortedError || !isCurrent()) return;
       console.error('Camera start error:', err);
-      alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
-      setScreen('home');
+      showCameraError(vw, err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.', () => navigate('play'));
     }
   }
   startCameraAndDetect();
@@ -202,6 +220,7 @@ export function renderPlay() {
   giveUp.onclick = () => finishRound(false);
 
   snap.onclick = async () => {
+    if (roundAwarded) return;
     try {
       stopLiveDetect();
       const model = await loadModel();
@@ -212,12 +231,14 @@ export function renderPlay() {
       canvas.style.display = 'block';
       const allPreds = await detectObjects(model, canvas);
       const preds = (allPreds || []).filter(p => getScore(p) > MIN_SCORE);
+      if (!isCurrent()) return;
       stopCamera();
       if (!preds.length) {
         alert(`Inga objekt över ${(MIN_SCORE * 100).toFixed(0)}% hittades. Försök igen.`);
         video.style.display = '';
         canvas.style.display = 'none';
         await startCamera(video);
+        if (!isCurrent()) return;
         startLiveDetect(async () => {
           const model = getModel();
           if (!model || video.readyState < 2) return;
@@ -252,6 +273,7 @@ export function renderPlay() {
       chooser.appendChild(grid);
       screens.play.appendChild(chooser);
     } catch (e) {
+      if (e instanceof CameraAbortedError || !isCurrent()) return;
       console.error(e);
       alert('Det gick inte att analysera bilden.');
     }

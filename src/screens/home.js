@@ -5,7 +5,7 @@ import { updateScoreBar, setScreen, screens } from '../ui.js';
 import { checkCameraPermissions, startCamera } from '../camera.js';
 import { loadModel } from '../detector.js';
 import { WIN_POINTS } from '../constants.js';
-import { createGame, updateGame, getGame } from '../firebase.js';
+import { createGame, updateGame, getGame, newGameId } from '../firebase.js';
 
 export function renderHome() {
   updateScoreBar();
@@ -40,6 +40,7 @@ function renderTestSetup() {
   wrap.appendChild(hint);
 
   const nameInput = document.createElement('input');
+  nameInput.maxLength = 40;
   nameInput.placeholder = 'Ditt namn';
   nameInput.value = store.game.playerAName || 'Testare';
   nameInput.autocapitalize = 'words';
@@ -73,7 +74,7 @@ function renderTestSetup() {
     const playerAName = name;
     const playerBName = `${name} 2`;
     const winPoints = parseInt(rounds.value, 10) || 1;
-    const gameId = Math.random().toString(36).slice(2, 10);
+    const gameId = newGameId();
 
     try {
       // No invite phase: the game starts in 'playing' right away
@@ -137,6 +138,7 @@ function renderCreateGame() {
   wrap.appendChild(cameraInfo);
 
   const nameA = document.createElement('input');
+  nameA.maxLength = 40;
   nameA.placeholder = 'Ditt namn';
   nameA.value = store.game.playerAName || '';
   nameA.autocapitalize = 'words';
@@ -144,6 +146,7 @@ function renderCreateGame() {
   wrap.appendChild(nameA);
 
   const nameB = document.createElement('input');
+  nameB.maxLength = 40;
   nameB.placeholder = 'Motspelaren namn';
   nameB.value = store.game.playerBName || '';
   wrap.appendChild(nameB);
@@ -174,7 +177,7 @@ function renderCreateGame() {
     const playerAName = nameA.value.trim() || 'Spelare A';
     const playerBName = nameB.value.trim() || 'Spelare B';
     const winPoints = parseInt(rounds.value, 10) || WIN_POINTS;
-    const gameId = Math.random().toString(36).slice(2, 10);
+    const gameId = newGameId();
 
     try {
       await createGame(gameId, {
@@ -244,6 +247,12 @@ function renderCreateGame() {
     testContainer.appendChild(statusDiv);
     testContainer.appendChild(testVideo);
     screens.home.appendChild(testContainer);
+    // Release only this test stream (not via stopCamera(), which would also
+    // kill a game camera started in the meantime).
+    const endTest = () => {
+      testVideo.srcObject?.getTracks().forEach(t => t.stop());
+      testContainer.remove();
+    };
     try {
       statusDiv.textContent = 'Laddar AI-modell...';
       await loadModel();
@@ -251,11 +260,11 @@ function renderCreateGame() {
       await startCamera(testVideo);
       statusDiv.textContent = '✅ Kamera och AI fungerar!';
       statusDiv.style.color = 'green';
-      setTimeout(() => testContainer.remove(), 3000);
+      setTimeout(endTest, 3000);
     } catch (error) {
       statusDiv.textContent = '❌ ' + error.message;
       statusDiv.style.color = 'red';
-      setTimeout(() => testContainer.remove(), 5000);
+      setTimeout(endTest, 5000);
     }
   };
   wrap.appendChild(testCameraBtn);
@@ -265,7 +274,14 @@ function renderCreateGame() {
 async function renderAcceptInvite() {
   screens.home.innerHTML = '<div class="center card"><div>Laddar inbjudan...</div></div>';
 
-  const game = await getGame(store.gameId);
+  let game;
+  try {
+    game = await getGame(store.gameId);
+  } catch (err) {
+    console.error('Kunde inte ladda inbjudan:', err);
+    screens.home.innerHTML = '<div class="center card"><div>Kunde inte ladda inbjudan. Ladda om sidan för att försöka igen.</div></div>';
+    return;
+  }
   if (!game) {
     screens.home.innerHTML = '<div class="center card"><div>Spelet hittades inte. Kontrollera länken.</div></div>';
     return;
@@ -291,6 +307,7 @@ async function renderAcceptInvite() {
   wrap.appendChild(sub);
 
   const nameInput = document.createElement('input');
+  nameInput.maxLength = 40;
   nameInput.placeholder = 'Ditt namn';
   nameInput.value = game.playerBName || '';
   nameInput.autocapitalize = 'words';

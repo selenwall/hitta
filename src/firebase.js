@@ -2,6 +2,12 @@ import { POLL_MS } from './constants.js';
 
 const API = '/api/game';
 
+// Unguessable-enough ID for sharing in a URL (16 base36 chars from crypto RNG).
+export function newGameId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, b => (b % 36).toString(36)).join('');
+}
+
 export async function createGame(gameId, data) {
   const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, {
     method: 'POST',
@@ -20,13 +26,15 @@ export async function updateGame(gameId, updates) {
   if (!res.ok) throw new Error('Failed to update game');
 }
 
-// Returns null for missing/unknown games so callers can treat it as "no game".
-// Other API functions throw on failure; getGame uses null to signal the poll
-// loop to call back with null (which routes both players home) rather than
-// retrying on a known-missing game.
+// Returns null for missing/unknown games so callers can treat it as "no game"
+// (the poll loop then routes the player home). Server/network errors throw
+// instead, so a transient 5xx mid-round is retried rather than treated as the
+// game having disappeared — which would bounce players home and restart the
+// round when it came back.
 export async function getGame(gameId) {
   const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, { cache: 'no-store' });
-  if (!res.ok) return null;
+  if (res.status === 400 || res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to load game (${res.status})`);
   return res.json();
 }
 

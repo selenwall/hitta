@@ -43,7 +43,14 @@ export function renderWait() {
     startBtn.textContent = 'Starta spelet!';
     startBtn.onclick = async () => {
       startBtn.disabled = true;
-      await updateGame(gameId, { status: 'playing' });
+      try {
+        await updateGame(gameId, { status: 'playing' });
+      } catch (err) {
+        console.error('Kunde inte starta spelet:', err);
+        startBtn.disabled = false;
+        alert('Kunde inte starta spelet. Kontrollera din anslutning och försök igen.');
+        return;
+      }
       // Navigate immediately — the other player's subscription handles their side.
       navigate('detect');
     };
@@ -101,7 +108,13 @@ function makeCancelBtn(game, gameId, myRole) {
   btn.onclick = async () => {
     btn.disabled = true;
     const canceledBy = myRole === 'A' ? game.playerAName : game.playerBName;
-    await updateGame(gameId, { status: 'canceled', canceledBy });
+    try {
+      await updateGame(gameId, { status: 'canceled', canceledBy });
+    } catch (err) {
+      console.error('Kunde inte avbryta spelet:', err);
+      btn.disabled = false;
+      alert('Kunde inte avbryta spelet. Kontrollera din anslutning och försök igen.');
+    }
   };
   return btn;
 }

@@ -4,6 +4,9 @@ let mediaStream = null;
 let activeRAF = 0;
 let liveDetectInterval = null;
 let liveDetectInProgress = false;
+// Bumped on every stop so a startCamera() still awaiting permission can tell
+// it was superseded (e.g. the player left the screen) and release the camera.
+let cameraGeneration = 0;
 
 function cancelRAF() {
   if (activeRAF) {
@@ -21,6 +24,7 @@ export function stopLiveDetect() {
 }
 
 export function stopCamera() {
+  cameraGeneration++;
   cancelRAF();
   stopLiveDetect();
   if (mediaStream) {
@@ -50,8 +54,18 @@ export async function checkCameraPermissions() {
   }
 }
 
+// Thrown when the camera was stopped while starting; callers should bail out
+// silently since the screen that wanted it is gone.
+export class CameraAbortedError extends Error {
+  constructor() {
+    super('Kameran stoppades');
+    this.name = 'CameraAbortedError';
+  }
+}
+
 export async function startCamera(videoEl, facingMode = 'environment') {
   stopCamera();
+  const generation = cameraGeneration;
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error('getUserMedia stöds inte i denna webbläsare');
@@ -60,14 +74,20 @@ export async function startCamera(videoEl, facingMode = 'environment') {
       video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     };
-    mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-    if (!mediaStream) throw new Error('Ingen mediaström mottagen');
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    if (!stream) throw new Error('Ingen mediaström mottagen');
+    if (generation !== cameraGeneration) {
+      stream.getTracks().forEach(t => t.stop());
+      throw new CameraAbortedError();
+    }
+    mediaStream = stream;
     videoEl.srcObject = mediaStream;
     return new Promise((resolve, reject) => {
       videoEl.onloadedmetadata = () => videoEl.play().then(resolve).catch(reject);
       videoEl.onerror = () => reject(new Error('Kunde inte spela upp video'));
     });
   } catch (error) {
+    if (error instanceof CameraAbortedError) throw error;
     let msg = 'Kunde inte starta kamera. ';
     if (error.name === 'NotAllowedError') {
       msg += 'Kamerabehörighet nekades. Klicka på kameran-ikonen i adressfältet och tillåt kameran.';
