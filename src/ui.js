@@ -1,5 +1,6 @@
 import { store } from './store.js';
 import { translateLabelToSv } from './translations.js';
+import { updateGame } from './firebase.js';
 
 export const screens = {
   home: document.querySelector('#screen-home'),
@@ -24,11 +25,21 @@ export function updateScoreBar() {
   const active = isPlaying ? (store.game.currentTurn === 'A' ? 'B' : 'A') : '';
   const aClass = active === 'A' ? 'badge active' : 'badge';
   const bClass = active === 'B' ? 'badge active' : 'badge';
-  scoreBar.innerHTML = `
-    <span class="${aClass}">${aName}<span class="vs"> ${store.game.playerAScore}</span></span>
-    <span class="vs">vs</span>
-    <span class="${bClass}"><span class="vs">${store.game.playerBScore} </span>${bName}</span>
-  `;
+  // Names come from the other player via the server, so build with text nodes
+  // rather than innerHTML to avoid script injection.
+  const span = (className, ...children) => {
+    const el = document.createElement('span');
+    el.className = className;
+    el.append(...children);
+    return el;
+  };
+  scoreBar.replaceChildren(
+    span(aClass, aName, span('vs', ` ${store.game.playerAScore}`)),
+    ' ',
+    span('vs', 'vs'),
+    ' ',
+    span(bClass, span('vs', `${store.game.playerBScore} `), bName),
+  );
 }
 
 export function buildDetectionBox(x, y, w, h, scaleX, scaleY, label, confidence) {
@@ -52,6 +63,42 @@ export function showFeedbackPlusOne() {
   node.innerHTML = '👍 <span class="plus">+1</span>';
   document.body.appendChild(node);
   setTimeout(() => node.remove(), 3000);
+}
+
+// "Avbryt spel" button shared by all in-game screens. The resulting status
+// change reaches every player (this one included) through the poll loop.
+export function makeCancelButton() {
+  const btn = document.createElement('button');
+  btn.className = 'danger';
+  btn.textContent = 'Avbryt spel';
+  btn.onclick = async () => {
+    btn.disabled = true;
+    const canceledBy = store.myRole === 'A' ? store.game.playerAName : store.game.playerBName;
+    try {
+      await updateGame(store.gameId, { status: 'canceled', canceledBy });
+    } catch (err) {
+      console.error('Kunde inte avbryta spelet:', err);
+      btn.disabled = false;
+      alert('Kunde inte avbryta spelet. Kontrollera din anslutning och försök igen.');
+    }
+  };
+  return btn;
+}
+
+// Replaces the camera view with an error and a retry button, so a player whose
+// camera or model failed mid-game can recover without leaving the game.
+export function showCameraError(videoWrap, message, onRetry) {
+  const box = document.createElement('div');
+  box.className = 'center card';
+  const msg = document.createElement('div');
+  msg.className = 'notice';
+  msg.textContent = message;
+  const retry = document.createElement('button');
+  retry.className = 'primary';
+  retry.textContent = 'Försök igen';
+  retry.onclick = onRetry;
+  box.append(msg, retry);
+  videoWrap.replaceWith(box);
 }
 
 let loaderEl = null;

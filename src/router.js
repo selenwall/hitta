@@ -1,7 +1,10 @@
 import { store } from './store.js';
 import { subscribeGame } from './firebase.js';
 import { getGameIdFromURL, getModeFromURL } from './urlState.js';
-import { updateScoreBar } from './ui.js';
+import { loadSession } from './session.js';
+import { updateScoreBar, hideLoader } from './ui.js';
+import { stopCamera } from './camera.js';
+import { stopTimer } from './timer.js';
 import { renderHome } from './screens/home.js';
 import { renderDetect } from './screens/detect.js';
 import { renderWait } from './screens/wait.js';
@@ -13,6 +16,12 @@ let currentScreen = null;
 
 export function navigate(screen) {
   currentScreen = screen;
+  // Leaving a screen must release everything it started: otherwise e.g. the
+  // opponent canceling mid-round leaves the camera on and the turn timer
+  // running, and its expiry would submit a round from the cancel screen.
+  stopTimer();
+  stopCamera();
+  hideLoader();
   switch (screen) {
     case 'home':   renderHome();   break;
     case 'detect': renderDetect(); break;
@@ -112,24 +121,20 @@ export function route() {
   }
   const gameId = getGameIdFromURL();
   if (gameId) {
-    store.gameId = gameId;
-    // Only read from sessionStorage if myRole isn't already live in memory.
+    // Only read from storage if this game's role isn't already live in memory.
     // A spurious popstate (common on mobile) would otherwise overwrite a
-    // freshly-set in-memory role with a null sessionStorage read.
-    if (!store.myRole) {
-      try {
-        store.myRole = sessionStorage.getItem(`hitta_role_${gameId}`) || null;
-      } catch {
-        store.myRole = null;
-      }
+    // freshly-set in-memory role with an empty storage read.
+    if (gameId !== store.gameId || !store.myRole) {
+      const session = loadSession(gameId);
+      store.myRole = session?.role || null;
+      store.myToken = session?.token || null;
     }
-    // A test game is always your own solo game — there is no second player
-    // to claim a role, so default to A instead of showing the invite screen.
-    if (store.testMode && !store.myRole) store.myRole = 'A';
+    store.gameId = gameId;
     startSubscription(gameId);
   } else {
     store.gameId = '';
     store.myRole = null;
+    store.myToken = null;
     if (currentScreen !== 'home') navigate('home');
     else renderHome();
   }

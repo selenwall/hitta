@@ -81,35 +81,10 @@ const COCO_SV = {
   toothbrush: 'tandborste',
 };
 
-const translateCache = new Map();
-const inflightTranslate = new Map();
-
+// All COCO-SSD labels are in COCO_SV, so translation never leaves the device;
+// an unknown label is shown as-is. Async so callers needn't change if a
+// richer local dictionary is added later.
 export async function translateLabelToSv(label) {
-  try {
-    const key = (label || '').trim().toLowerCase();
-    if (!key) return label;
-    if (translateCache.has(key)) return translateCache.get(key);
-    if (COCO_SV[key]) {
-      translateCache.set(key, COCO_SV[key]);
-      return COCO_SV[key];
-    }
-    if (inflightTranslate.has(key)) return inflightTranslate.get(key);
-    const p = fetch('https://libretranslate.com/translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ q: key, source: 'en', target: 'sv', format: 'text' }),
-    }).then(r => r.json()).then(j => {
-      const out = (j && j.translatedText) ? j.translatedText : label;
-      translateCache.set(key, out);
-      inflightTranslate.delete(key);
-      return out;
-    }).catch(() => {
-      inflightTranslate.delete(key);
-      return label;
-    });
-    inflightTranslate.set(key, p);
-    return p;
-  } catch {
-    return label;
-  }
+  const key = (label || '').trim().toLowerCase();
+  return COCO_SV[key] || label;
 }

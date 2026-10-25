@@ -1,17 +1,24 @@
 import { store } from '../store.js';
-import { updateScoreBar, setScreen, screens, buildDetectionBox, showLoader, hideLoader } from '../ui.js';
-import { startCamera, stopCamera, stopLiveDetect, startLiveDetect } from '../camera.js';
+import { updateScoreBar, setScreen, screens, buildDetectionBox, showLoader, hideLoader, showCameraError, makeCancelButton } from '../ui.js';
+import { startCamera, stopCamera, stopLiveDetect, startLiveDetect, CameraAbortedError } from '../camera.js';
 import { loadModel, detectObjects, getModel, parseBbox, getLabel, getScore } from '../detector.js';
 import { translateLabelToSv } from '../translations.js';
 import { MIN_SCORE } from '../constants.js';
 import { updateGame } from '../firebase.js';
-import { navigate } from '../router.js';
+import { navigate, getCurrentScreen } from '../router.js';
+
+let detectRenderId = 0;
 
 export function renderDetect() {
   updateScoreBar();
   setScreen('detect');
   stopCamera();
   screens.detect.innerHTML = '';
+
+  // Async work (camera start, model load) can finish after the player has been
+  // routed elsewhere; it must not act on a screen that's gone.
+  const renderId = ++detectRenderId;
+  const isCurrent = () => renderId === detectRenderId && getCurrentScreen() === 'detect';
 
   const container = document.createElement('div');
   container.className = 'col';
@@ -44,21 +51,30 @@ export function renderDetect() {
   snap.className = 'primary';
   snap.textContent = 'Ta bild';
 
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'danger';
-  cancelBtn.textContent = 'Avbryt spel';
-  cancelBtn.onclick = async () => {
-    cancelBtn.disabled = true;
-    const canceledBy = store.myRole === 'A' ? store.game.playerAName : store.game.playerBName;
-    await updateGame(store.gameId, { status: 'canceled', canceledBy });
-  };
-  actions.appendChild(cancelBtn);
+  actions.appendChild(makeCancelButton());
 
   actions.appendChild(snap);
   container.appendChild(actions);
   screens.detect.appendChild(container);
 
   const ctx = canvas.getContext('2d');
+
+  let snapBusy = false;
+  let frozen = false; // a still frame is shown; "Ta bild" then means retake
+  let chooser = null;
+
+  // Shows the still frame instead of the live video and releases the camera.
+  const freezeFrame = () => {
+    stopLiveDetect();
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    video.style.display = 'none';
+    canvas.style.display = 'block';
+    stopCamera();
+    frozen = true;
+    snap.textContent = 'Ta ny bild';
+  };
 
   const drawInteractiveBoxes = (preds, onPick) => {
     overlay.classList.add('interactive');
@@ -83,21 +99,11 @@ export function renderDetect() {
     (preds || []).filter(p => getScore(p) > MIN_SCORE).forEach((p) => {
       const [x, y, w, h] = parseBbox(p);
       const { box, lab } = buildDetectionBox(x, y, w, h, scaleX, scaleY, getLabel(p), getScore(p));
-      lab.onclick = async (e) => {
+      lab.onclick = (e) => {
         e.stopPropagation();
-        try {
-          stopLiveDetect();
-          await loadModel();
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          video.style.display = 'none';
-          canvas.style.display = 'block';
-          stopCamera();
-          await pickTarget(p);
-        } catch (err) {
-          console.error(err);
-        }
+        if (snapBusy) return;
+        freezeFrame();
+        pickTarget(p);
       };
       box.appendChild(lab);
       overlay.appendChild(box);
@@ -113,6 +119,7 @@ export function renderDetect() {
       alert('Kunde inte skicka utmaningen. Kontrollera din anslutning och välj objektet igen.');
       return;
     }
+    if (!isCurrent()) return;
     // Optimistic local update so the next screen shows the chosen challenge
     // immediately instead of after the next poll.
     store.game = { ...store.game, ...updates };
@@ -120,55 +127,75 @@ export function renderDetect() {
     navigate(store.testMode ? 'play' : 'wait');
   }
 
+  const liveDetect = async (isLive) => {
+    const model = getModel();
+    if (!model || video.readyState < 2) return;
+    const preds = await detectObjects(model, video);
+    if (isLive()) drawLiveBoxes(preds);
+  };
+
+  // Back from a still frame to the live camera.
+  async function resumeLive() {
+    chooser?.remove();
+    chooser = null;
+    overlay.innerHTML = '';
+    video.style.display = '';
+    canvas.style.display = 'none';
+    frozen = false;
+    snap.textContent = 'Ta bild';
+    try {
+      await startCamera(video);
+    } catch (err) {
+      if (err instanceof CameraAbortedError || !isCurrent()) return;
+      showCameraError(vw, err.message, () => navigate('detect'));
+      return;
+    }
+    if (isCurrent()) startLiveDetect(liveDetect);
+  }
+
   async function startCameraAndDetect() {
     try {
       await startCamera(video);
+      if (!isCurrent()) return;
       showLoader();
       await loadModel();
+      // Only touch the loader while still current: after navigating away it
+      // may belong to the next screen.
+      if (!isCurrent()) return;
       hideLoader();
-      startLiveDetect(async () => {
-        const model = getModel();
-        if (!model || video.readyState < 2) return;
-        const preds = await detectObjects(model, video);
-        drawLiveBoxes(preds);
-      });
+      startLiveDetect(liveDetect);
     } catch (err) {
+      if (err instanceof CameraAbortedError || !isCurrent()) return;
       hideLoader();
       console.error('Camera start error:', err);
-      alert(err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.');
-      setScreen('home');
+      showCameraError(vw, err.message || 'Kunde inte starta kamera. Ge kameratillstånd och försök igen.', () => navigate('detect'));
     }
   }
   startCameraAndDetect();
 
   snap.onclick = async () => {
+    if (snapBusy) return;
+    snapBusy = true;
+    snap.disabled = true;
     try {
-      stopLiveDetect();
+      if (frozen) {
+        await resumeLive();
+        return;
+      }
       const model = await loadModel();
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      video.style.display = 'none';
-      canvas.style.display = 'block';
+      if (!isCurrent()) return;
+      freezeFrame();
       const allPreds = await detectObjects(model, canvas);
       const preds = (allPreds || []).filter(p => getScore(p) > MIN_SCORE);
-      stopCamera();
+      if (!isCurrent()) return;
       if (!preds.length) {
         alert(`Inga objekt över ${(MIN_SCORE * 100).toFixed(0)}% hittades. Försök igen.`);
-        video.style.display = '';
-        canvas.style.display = 'none';
-        await startCamera(video);
-        startLiveDetect(async () => {
-          const model = getModel();
-          if (!model || video.readyState < 2) return;
-          const preds = await detectObjects(model, video);
-          drawLiveBoxes(preds);
-        });
+        await resumeLive();
         return;
       }
       drawInteractiveBoxes(preds, pickTarget);
 
-      const chooser = document.createElement('div');
+      chooser = document.createElement('div');
       chooser.className = 'card col';
       const chooserTitle = document.createElement('div');
       chooserTitle.textContent = 'Eller välj i listan';
@@ -189,8 +216,12 @@ export function renderDetect() {
       chooser.appendChild(grid);
       screens.detect.appendChild(chooser);
     } catch (e) {
+      if (e instanceof CameraAbortedError || !isCurrent()) return;
       console.error(e);
       alert('Det gick inte att analysera bilden.');
+    } finally {
+      snapBusy = false;
+      snap.disabled = false;
     }
   };
 }

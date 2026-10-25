@@ -33,10 +33,11 @@ There is no build step, linter, or test suite configured. The app is served dire
 - **camera.js** — Wraps `getUserMedia`, manages live detection loop
 - **detector.js** — Loads COCO-SSD (mobilenet_v2 base) via TensorFlow.js, runs object detection, returns labeled bounding boxes
 - **firebase.js** — Backend abstraction: GET/POST/PATCH game state via `/api/game` Netlify Function (despite the name, this is **not Firebase**)
-- **translations.js** — Translates English ML labels to Swedish (cached, with LibreTranslate fallback)
+- **translations.js** — Translates English ML labels to Swedish from a local COCO dictionary (no network)
 - **timer.js** — Manages 120-second turn countdown
 - **ui.js** — Screen show/hide helpers, score bar updates, share sheet
 - **urlState.js** — Reads/writes `gid` query param
+- **session.js** — Persists this device's role and player token per game (sessionStorage, falling back to localStorage so a player can rejoin after closing the tab)
 
 Screens in `src/screens/` each export an `init(gameId)` function and own their DOM section.
 
@@ -45,7 +46,9 @@ Screens in `src/screens/` each export an `init(gameId)` function and own their D
 Single serverless function (`game.js`) backed by **Netlify Blobs** for storage. Handles:
 - `GET /api/game?id=...` — Read game state
 - `POST /api/game` — Create game
-- `PATCH /api/game` — Update game state
+- `PATCH /api/game` — Update game state; requires the `X-Player-Token` header, except for player B claiming an open invite (which issues B's token)
+
+POST returns player A's token. Tokens are stripped from GET responses. Writes use ETag compare-and-swap (`onlyIfMatch`) so concurrent updates aren't lost, and only whitelisted, type-checked fields are stored.
 
 Real-time sync is achieved by polling every 1500ms from the client.
 
@@ -53,5 +56,6 @@ Real-time sync is achieved by polling every 1500ms from the client.
 
 - All ML inference runs **client-side** (TensorFlow.js + COCO-SSD loaded from CDN in `index.html`; model weights are downloaded once and cached, inference never leaves the device)
 - No build tooling; ES modules served directly from root
-- State lives in Netlify Blobs (keyed by `gameId`); no auth or user accounts
+- State lives in Netlify Blobs (keyed by `gameId`); no user accounts — a per-game random token proves which player is writing
+- Two players can't share one browser profile (both tabs would read the same stored role); use test mode or a private window
 - UI language is Swedish; object detection labels translated on the fly

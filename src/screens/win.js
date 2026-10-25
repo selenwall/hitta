@@ -30,6 +30,7 @@ export function renderWin() {
     store.game = { ...DEFAULT_GAME, playerAName: pa, playerBName: pb };
     store.gameId = '';
     store.myRole = null;
+    store.myToken = null;
     setGameIdInURL('');
     navigate('home');
   };
