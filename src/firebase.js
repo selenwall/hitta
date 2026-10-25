@@ -2,6 +2,9 @@ import { POLL_MS } from './constants.js';
 import { store } from './store.js';
 
 const API = '/api/game';
+// A request that hangs (flaky mobile network) must fail rather than leave a
+// button disabled forever; the poll loop just retries on its next tick.
+const TIMEOUT_MS = 10000;
 
 // Unguessable-enough ID for sharing in a URL (16 base36 chars from crypto RNG).
 export function newGameId() {
@@ -19,6 +22,7 @@ function apiError(message, res) {
 export async function createGame(gameId, data) {
   const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, {
     method: 'POST',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
@@ -34,6 +38,7 @@ export async function updateGame(gameId, updates) {
   if (store.myToken) headers['X-Player-Token'] = store.myToken;
   const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, {
     method: 'PATCH',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
     headers,
     body: JSON.stringify(updates),
   });
@@ -47,7 +52,7 @@ export async function updateGame(gameId, updates) {
 // game having disappeared — which would bounce players home and restart the
 // round when it came back.
 export async function getGame(gameId) {
-  const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, { cache: 'no-store' });
+  const res = await fetch(`${API}?id=${encodeURIComponent(gameId)}`, { cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (res.status === 400 || res.status === 404) return null;
   if (!res.ok) throw new Error(`Failed to load game (${res.status})`);
   return res.json();

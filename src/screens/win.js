@@ -1,8 +1,6 @@
 import { store } from '../store.js';
-import { navigate } from '../router.js';
-import { setGameIdInURL } from '../urlState.js';
+import { leaveGame } from '../router.js';
 import { updateScoreBar, setScreen, screens } from '../ui.js';
-import { DEFAULT_GAME } from '../constants.js';
 
 export function renderWin() {
   updateScoreBar();
@@ -23,17 +21,7 @@ export function renderWin() {
   const again = document.createElement('button');
   again.className = 'primary';
   again.textContent = 'Spela igen';
-  again.onclick = () => {
-    if (store.unsubscribe) { store.unsubscribe(); store.unsubscribe = null; }
-    const pa = store.game.playerAName || 'Spelare A';
-    const pb = store.game.playerBName || 'Spelare B';
-    store.game = { ...DEFAULT_GAME, playerAName: pa, playerBName: pb };
-    store.gameId = '';
-    store.myRole = null;
-    store.myToken = null;
-    setGameIdInURL('');
-    navigate('home');
-  };
+  again.onclick = leaveGame;
 
   c.appendChild(msg);
   c.appendChild(score);

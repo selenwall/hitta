@@ -1,6 +1,5 @@
 import { store } from './store.js';
 import { translateLabelToSv } from './translations.js';
-import { updateGame } from './firebase.js';
 
 export const screens = {
   home: document.querySelector('#screen-home'),
@@ -64,26 +63,6 @@ export function showFeedbackPlusOne() {
   node.innerHTML = '👍 <span class="plus">+1</span>';
   document.body.appendChild(node);
   setTimeout(() => node.remove(), 3000);
-}
-
-// "Avbryt spel" button shared by all in-game screens. The resulting status
-// change reaches every player (this one included) through the poll loop.
-export function makeCancelButton() {
-  const btn = document.createElement('button');
-  btn.className = 'danger';
-  btn.textContent = 'Avbryt spel';
-  btn.onclick = async () => {
-    btn.disabled = true;
-    const canceledBy = store.myRole === 'A' ? store.game.playerAName : store.game.playerBName;
-    try {
-      await updateGame(store.gameId, { status: 'canceled', canceledBy });
-    } catch (err) {
-      console.error('Kunde inte avbryta spelet:', err);
-      btn.disabled = false;
-      alert('Kunde inte avbryta spelet. Kontrollera din anslutning och försök igen.');
-    }
-  };
-  return btn;
 }
 
 // Replaces the camera view with an error and a retry button, so a player whose

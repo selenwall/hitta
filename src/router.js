@@ -1,7 +1,8 @@
 import { store } from './store.js';
 import { subscribeGame } from './firebase.js';
-import { getGameIdFromURL, getModeFromURL } from './urlState.js';
+import { getGameIdFromURL, getModeFromURL, setGameIdInURL } from './urlState.js';
 import { loadSession } from './session.js';
+import { DEFAULT_GAME } from './constants.js';
 import { updateScoreBar, hideLoader } from './ui.js';
 import { stopCamera } from './camera.js';
 import { stopTimer } from './timer.js';
@@ -32,6 +33,20 @@ export function navigate(screen) {
     case 'cancel': renderCancel(); break;
     case 'playground': renderPlayground(); break;
   }
+}
+
+// Drops this device out of the current game (keeping the names for the next
+// one) and goes to the start screen. Server state is not touched.
+export function leaveGame() {
+  if (store.unsubscribe) { store.unsubscribe(); store.unsubscribe = null; }
+  const pa = store.game.playerAName || 'Spelare A';
+  const pb = store.game.playerBName || 'Spelare B';
+  store.game = { ...DEFAULT_GAME, playerAName: pa, playerBName: pb };
+  store.gameId = '';
+  store.myRole = null;
+  store.myToken = null;
+  setGameIdInURL('');
+  navigate('home');
 }
 
 export function getCurrentScreen() {
