@@ -9,6 +9,7 @@ export const screens = {
   play: document.querySelector('#screen-play'),
   win: document.querySelector('#screen-win'),
   cancel: document.querySelector('#screen-cancel'),
+  playground: document.querySelector('#screen-playground'),
 };
 
 const scoreBar = document.querySelector('#scoreBar');

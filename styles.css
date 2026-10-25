@@ -45,6 +45,7 @@ video, canvas{width:100%;height:auto;display:block}
 .challenge-pill .name{font-size:24px;font-weight:900;color:var(--accent);letter-spacing:1px}
 .timer-display{font-variant-numeric:tabular-nums;font-weight:900;font-size:22px;border:2px solid var(--accent);border-radius:999px;padding:8px 16px;min-width:80px;text-align:center;background:rgba(54,211,153,0.1);color:var(--accent)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.found-list{display:flex;flex-wrap:wrap;gap:8px;min-height:34px}
 
 .notice{background:#1b1b1b;border:1px solid var(--border);padding:12px 14px;border-radius:10px}
 

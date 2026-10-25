@@ -3,8 +3,6 @@ import { navigate, startSubscription } from '../router.js';
 import { setGameIdInURL } from '../urlState.js';
 import { updateScoreBar, setScreen, screens, shareLink } from '../ui.js';
 import { saveSession } from '../session.js';
-import { checkCameraPermissions, startCamera } from '../camera.js';
-import { loadModel } from '../detector.js';
 import { WIN_POINTS } from '../constants.js';
 import { createGame, updateGame, getGame, newGameId } from '../firebase.js';
 
@@ -124,7 +122,17 @@ function renderTestSetup() {
     navigate('detect');
   };
   wrap.appendChild(startBtn);
+  wrap.appendChild(makePlaygroundButton());
   screens.home.appendChild(wrap);
+}
+
+// Opens the playground: try the camera and object detection without a game.
+function makePlaygroundButton() {
+  const btn = document.createElement('button');
+  btn.className = 'ghost';
+  btn.textContent = 'Prova kameran';
+  btn.onclick = () => navigate('playground');
+  return btn;
 }
 
 function renderCreateGame() {
@@ -137,7 +145,7 @@ function renderCreateGame() {
 
   const cameraInfo = document.createElement('div');
   cameraInfo.className = 'hint';
-  cameraInfo.innerHTML = '💡 <strong>Kameraproblem?</strong> Klicka på "Testa kamera" för att kontrollera behörigheter.';
+  cameraInfo.innerHTML = '💡 <strong>Ny här?</strong> Tryck på "Prova kameran" för att testa kameran och se vilka objekt AI:n känner igen.';
   wrap.appendChild(cameraInfo);
 
   const nameA = document.createElement('input');
@@ -219,42 +227,7 @@ function renderCreateGame() {
   };
   wrap.appendChild(sendBtn);
 
-  const testCameraBtn = document.createElement('button');
-  testCameraBtn.className = 'ghost';
-  testCameraBtn.textContent = 'Testa kamera';
-  testCameraBtn.onclick = async () => {
-    const check = await checkCameraPermissions();
-    if (!check.supported || check.error) { alert(check.error); return; }
-    const testVideo = document.createElement('video');
-    testVideo.style.cssText = 'width:200px;height:150px;border:2px solid #333;margin:10px';
-    const testContainer = document.createElement('div');
-    testContainer.style.cssText = 'text-align:center;margin:20px 0';
-    const statusDiv = document.createElement('div');
-    statusDiv.textContent = 'Testar kamera och AI-modeller...';
-    testContainer.appendChild(statusDiv);
-    testContainer.appendChild(testVideo);
-    screens.home.appendChild(testContainer);
-    // Release only this test stream (not via stopCamera(), which would also
-    // kill a game camera started in the meantime).
-    const endTest = () => {
-      testVideo.srcObject?.getTracks().forEach(t => t.stop());
-      testContainer.remove();
-    };
-    try {
-      statusDiv.textContent = 'Laddar AI-modell...';
-      await loadModel();
-      statusDiv.textContent = 'AI-modell laddad, testar kamera...';
-      await startCamera(testVideo);
-      statusDiv.textContent = '✅ Kamera och AI fungerar!';
-      statusDiv.style.color = 'green';
-      setTimeout(endTest, 3000);
-    } catch (error) {
-      statusDiv.textContent = '❌ ' + error.message;
-      statusDiv.style.color = 'red';
-      setTimeout(endTest, 5000);
-    }
-  };
-  wrap.appendChild(testCameraBtn);
+  wrap.appendChild(makePlaygroundButton());
   screens.home.appendChild(wrap);
 }
 

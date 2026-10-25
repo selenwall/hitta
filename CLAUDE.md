@@ -24,6 +24,8 @@ There is no build step, linter, or test suite configured. The app is served dire
 
 **Test mode**: open the app with `?mode=test` to play solo — the invite/accept flow is skipped, the game starts immediately, and the same device acts as both challenger (pick a target) and finder (find it again). Useful for testing the full game flow without a second player.
 
+**Playground**: the "Prova kameran" button on the home screen opens a playground screen (`src/screens/playground.js`) with live object detection and a list of what the AI sees, marking objects confident enough (≥ `MIN_SCORE`) to count in a game. No game is created and nothing is sent to the server.
+
 ### Frontend Structure (`src/`)
 
 - **main.js** — Entry point, attaches routing listeners to navigation events
