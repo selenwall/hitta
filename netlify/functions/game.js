@@ -1,12 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { getStore } from "@netlify/blobs";
 
+// Clients send their version in X-Hitta-Client (absent = 1, the client from
+// before player tokens). Bump MIN_CLIENT_VERSION together with
+// CLIENT_VERSION in src/constants.js when the API changes in a way older
+// clients can't handle: every response advertises it, and older clients
+// reload themselves to pick up the new code.
+const MIN_CLIENT_VERSION = 2;
+
 // The API is only called same-origin, so no CORS headers: other sites must
 // not be able to read or write games from a visitor's browser.
 function json(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...extra },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Hitta-Min-Client": String(MIN_CLIENT_VERSION),
+      ...extra,
+    },
   });
 }
 
@@ -61,7 +72,7 @@ async function readBody(req) {
 // Player tokens are secrets; never send them to clients in game state.
 function publicView(game) {
   if (!game) return null;
-  const { tokenA, tokenB, ...rest } = game;
+  const { tokenA, tokenB, legacyClient, ...rest } = game;
   return rest;
 }
 
@@ -74,6 +85,9 @@ export default async (req) => {
   // Strong consistency: polling clients must never read a stale replica after
   // a turn switch, or screens flip-flop between old and new game state.
   const store = getStore({ name: "games", consistency: "strong" });
+  // Version-1 clients (tabs opened before tokens, still running old code)
+  // never store or send tokens.
+  const tokenAware = (parseInt(req.headers.get("x-hitta-client"), 10) || 1) >= 2;
 
   if (req.method === "GET") {
     const data = await store.get(gameId, { type: "json" });
@@ -83,12 +97,14 @@ export default async (req) => {
   if (req.method === "POST") {
     const body = await readBody(req);
     if (!body) return json({ error: "Invalid game data" }, 400);
-    // The creator is player A; the token proves it on later writes.
-    const token = randomUUID();
+    // The creator is player A; the token proves it on later writes. A
+    // version-1 client would discard the token and then be locked out of its
+    // own game, so its games are created without one (legacy, as before).
+    const token = tokenAware ? randomUUID() : undefined;
     // onlyIfNew: a create must never overwrite an existing game.
     const { modified } = await store.setJSON(gameId, { ...body, tokenA: token, rev: 1 }, { onlyIfNew: true });
     if (!modified) return json({ error: "Game already exists" }, 409);
-    return json({ ok: true, token });
+    return json(token ? { ok: true, token } : { ok: true });
   }
 
   if (req.method === "PATCH") {
@@ -106,10 +122,10 @@ export default async (req) => {
       const updates = { ...body };
       let issuedToken;
 
-      // Games created before player tokens existed have no tokenA; keep them
-      // writable without a token (as they were) so they can still be played
-      // or canceled — including from tabs still running the old client.
-      const legacy = !existing.tokenA;
+      // Legacy games accept writes without a token, as before tokens existed:
+      // those created by a version-1 client or before tokens (no tokenA), and
+      // those a version-1 client joined (it can't present B's token).
+      const legacy = !existing.tokenA || existing.legacyClient === true;
       const isPlayer = legacy || (token && (token === existing.tokenA || token === existing.tokenB));
       const isJoin = existing.status === "inviting" && !existing.tokenB && body.status === "accepted";
 
@@ -123,6 +139,7 @@ export default async (req) => {
           if (key !== "playerBName" && key !== "status") delete updates[key];
         }
         updates.tokenB = issuedToken;
+        if (!tokenAware) updates.legacyClient = true;
       }
 
       // A finished game is final: late writes (e.g. a round result racing a

@@ -50,7 +50,7 @@ Single serverless function (`game.js`) backed by **Netlify Blobs** for storage. 
 - `POST /api/game` — Create game
 - `PATCH /api/game` — Update game state; requires the `X-Player-Token` header, except for player B claiming an open invite (which issues B's token)
 
-POST returns player A's token. Tokens are stripped from GET responses. Writes use ETag compare-and-swap (`onlyIfMatch`) so concurrent updates aren't lost, and only whitelisted, type-checked fields are stored.
+POST returns player A's token. Tokens are stripped from GET responses. Clients send `X-Hitta-Client` (`CLIENT_VERSION` in `constants.js`); requests without it come from the pre-token client, whose games stay writable without a token. Every response carries `X-Hitta-Min-Client` (`MIN_CLIENT_VERSION` in `game.js`) and older clients reload themselves — **bump both on any API change older clients can't handle.** Writes use ETag compare-and-swap (`onlyIfMatch`) so concurrent updates aren't lost, and only whitelisted, type-checked fields are stored.
 
 Real-time sync is achieved by polling every 1500ms from the client.
 
